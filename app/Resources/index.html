@@ -379,7 +379,7 @@
   }
   .art-ph.sys { background: linear-gradient(135deg, #3a3a42, #1d1d22); }
   .art-ph svg { width: 26px; height: 26px; }
-  .t-play, .t-del, .t-check { position: absolute; display: grid; place-items: center; border-radius: 50%; transition: opacity .18s, transform .18s; }
+  .t-play, .t-del, .t-edit, .t-check { position: absolute; display: grid; place-items: center; border-radius: 50%; transition: opacity .18s, transform .18s; }
   .t-play {
     left: 50%; top: 50%; width: 42px; height: 42px; margin: -21px 0 0 -21px;
     background: rgba(0,0,0,.45); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
@@ -387,6 +387,9 @@
   }
   .t-play svg { width: 14px; height: 14px; }
   .t-del { right: 6px; top: 6px; width: 24px; height: 24px; background: rgba(0,0,0,.55); opacity: 0; }
+  .t-edit { right: 36px; top: 6px; width: 24px; height: 24px; background: rgba(0,0,0,.55); opacity: 0; }
+  .t-edit svg { width: 11px; height: 11px; }
+  .tile:hover .t-edit, .t-edit:focus-visible { opacity: 1; }
   .t-del svg { width: 10px; height: 10px; }
   .tile:hover .t-play, .tile.on .t-play, .t-play:focus-visible { opacity: 1; transform: scale(1); }
   .tile:hover .t-del, .t-del:focus-visible { opacity: 1; }
@@ -1013,10 +1016,17 @@ function renderLive() {
   $("#ringBar").style.strokeDashoffset = app.classList.contains("boot") ? CIRC : CIRC * (1 - frac);
 
   document.title = run ? `${big} 캐릭터 타이머` : "캐릭터 타이머";
+  let badge = "";
+  if (run) {
+    const sec = run.target != null ? Math.max(0, run.target - e) : e;
+    badge = run.startedAt ? String(Math.max(1, Math.ceil(sec / 60))) : "II";
+  }
+  if (badge !== lastBadge) { lastBadge = badge; post("badge", { text: badge }); }
   const sec = Math.floor(Date.now() / 1000);
   if (sec !== lastStatsSec) { lastStatsSec = sec; renderStats(); }
 }
 let lastStatsSec = 0;
+let lastBadge = null;
 
 /* ════════════════ 화면: 오늘·이번 주 ════════════════ */
 function renderStats() {
@@ -1347,6 +1357,7 @@ $("#openAlarms").onclick = () => openSheet("알람", renderAlarms);
 
 const LINK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>';
 const BELL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
+const EDIT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>';
 const CHECK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
 let alarmQuery = "";
@@ -1439,6 +1450,7 @@ function renderAlarmList() {
       <div class="thumb">
         ${a.kind === "yt" ? `<img src="${ytThumb(a.videoId)}" alt="" loading="lazy">` : `<span class="art-ph" style="--h:${hueOf(a.title)}">${NOTE_ICON}</span>`}
         <button class="t-play" data-play="${a.id}" aria-label="${esc(a.title)} ${playing ? "멈추기" : "듣기"}">${playing ? PAUSE_ICON : PLAY_ICON}</button>
+        <button class="t-edit" data-aren="${a.id}" aria-label="${esc(a.title)} 이름 바꾸기">${EDIT_ICON}</button>
         <button class="t-del" data-adel="${a.id}" aria-label="${esc(a.title)} 지우기">${X_ICON}</button>
         <span class="t-check" aria-hidden="true">${CHECK_ICON}</span>
       </div>
@@ -1609,6 +1621,7 @@ function onYtInput() {
     else window.__ytInfo({ videoId: parsed.videoId, status: 200, title: "" });
   }, 200);
 }
+let autoAdd = false;      // 붙여넣기로 들어온 링크는 확인되는 대로 바로 추가
 window.__ytInfo = (info) => {
   if (!ytDraft || info.videoId !== ytDraft.videoId || sheetRender !== renderAlarms) return;
   ytDraft.status = info.status;
@@ -1619,6 +1632,10 @@ window.__ytInfo = (info) => {
   else if (info.status === 401 || info.status === 403) { hint.classList.add("bad"); hint.innerHTML = `${img}<span>재생이 막힌 영상이에요. 같은 곡의 가사·Topic 영상을 써 보세요</span>`; }
   else if (info.status === 404 || info.status === 400) { hint.classList.add("bad"); hint.innerHTML = `${img}<span>영상을 찾을 수 없어요</span>`; }
   else hint.innerHTML = `${img}<span>YouTube 영상</span>`;
+  if (autoAdd) {
+    autoAdd = false;
+    if (info.status !== 401 && info.status !== 403 && info.status !== 404 && info.status !== 400) addFromLink();
+  }
 };
 
 function addFromLink() {
@@ -1667,6 +1684,16 @@ $("#sheetBody").addEventListener("submit", (e) => {
   e.preventDefault();
   addFromLink();
 });
+$("#sheetBody").addEventListener("paste", (e) => {
+  if (sheetRender !== renderAlarms || e.target.id !== "ytUrl") return;
+  const text = (e.clipboardData || window.clipboardData).getData("text");
+  if (!parseYouTube(text)) return;
+  e.preventDefault();
+  e.target.value = text.trim();
+  autoAdd = true;
+  ytDraft = null;
+  onYtInput();
+});
 $("#sheetBody").addEventListener("dblclick", (e) => {
   if (sheetRender !== renderAlarms) return;
   const el = e.target.closest("[data-title]");
@@ -1685,6 +1712,7 @@ $("#sheetBody").addEventListener("click", (e) => {
     if (d.addfile !== undefined) post("pickSounds");
     else if (d.play) listen(d.play);
     else if (d.adel) removeAlarm(d.adel);
+    else if (d.aren) { const el = $(`[data-title="${d.aren}"]`); if (el) startRename(el); }
     else if (d.eplay !== undefined) listen(listening);
     else if (d.nowclose !== undefined) { closeNowbar(); renderAlarmList(); }
     else if (d.esetstart !== undefined) {
@@ -1699,6 +1727,7 @@ $("#sheetBody").addEventListener("click", (e) => {
     return;
   }
   if (e.target.closest("input")) return;
+  if (e.target.closest(".t-title") && e.detail > 1) return;          // 두 번 누르기는 이름 바꾸기
   const tile = e.target.closest("[data-tile]");
   if (tile) selectTile(tile.dataset.tile);
 });

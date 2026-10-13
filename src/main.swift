@@ -169,8 +169,10 @@ final class EditorPlayer {
 
 // ───────── 시간이 끝나면 모든 창 위(전체화면 앱 위 포함)에 뜨는 알림 창 ─────────
 final class AlertPanel: NSPanel {
+    var onCancel: (() -> Void)?
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+    override func cancelOperation(_ sender: Any?) { onCancel?() }      // Esc
 }
 
 /// 알림 창에서 틀 유튜브 영상
@@ -215,6 +217,8 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
         p.hidesOnDeactivate = false
         p.isMovableByWindowBackground = true
         p.isReleasedWhenClosed = false
+        let cancelId = preview ? "closePreview" : "ok"
+        p.onCancel = { [weak self] in self?.close(); self?.onAction?(cancelId) }
 
         let glass = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: W, height: H))
         glass.material = .hudWindow
@@ -237,7 +241,7 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
             leftEdge = 22 + vw + 24
             if yt.maxSec > 0 {
                 let t = Timer(timeInterval: yt.maxSec, repeats: false) { [weak self] _ in
-                    self?.player?.evaluateJavaScript("window.player && player.pauseVideo && player.pauseVideo()")
+                    self?.player?.evaluateJavaScript("window.__ctPause && window.__ctPause()")
                 }
                 RunLoop.main.add(t, forMode: .common)
                 pauseTimer = t
@@ -317,40 +321,59 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
     }
 
     /// 유튜브 공식 플레이어(IFrame API). 정해 둔 지점부터 재생하고, 끝나면 그 지점부터 다시.
+    /// 유튜브 공식 삽입 플레이어 페이지를 그대로 띄운다.
+    /// (iframe 안에 넣으면 자동 재생이 막혀서 재생 버튼을 한 번 더 눌러야 했어요)
     private func makePlayer(_ yt: YouTubeAlarm, frame: NSRect) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.mediaTypesRequiringUserActionForPlayback = []
         config.userContentController.add(self, name: "yt")
+        // 재생 위치·볼륨·반복만 다루는 작은 스크립트 (YouTube 페이지 안에서 실행)
+        let control = """
+        (function(){
+          if (window.__ct) return; window.__ct = true;
+          var START=\(yt.start), VOL=\(Double(yt.volume) / 100.0), sent=false, tries=0;
+          function send(m){ try{ webkit.messageHandlers.yt.postMessage(m); }catch(e){} }
+          function v(){ return document.querySelector('video'); }
+          window.__ctTime = function(){ var x=v(); return x ? x.currentTime : -1; };
+          window.__ctPause = function(){ var x=v(); if (x) x.pause(); };
+          function hook(x){
+            if (x.__ct) return; x.__ct = true;
+            x.volume = VOL;
+            x.addEventListener('playing', function(){ if(!sent){ sent=true; send({playing:true}); } });
+            x.addEventListener('ended', function(){ x.currentTime = START; x.play(); });
+            function go(){
+              if (START > 0 && x.currentTime < START - 1) x.currentTime = START;
+              var p = x.play();
+              if (p && p.catch) p.catch(function(){ x.muted = true; x.play().then(function(){ setTimeout(function(){ x.muted = false; }, 150); }); });
+            }
+            if (x.readyState >= 1) go(); else x.addEventListener('loadedmetadata', go, { once: true });
+          }
+          var timer = setInterval(function(){
+            tries++;
+            var x = v();
+            if (document.querySelector('.ytp-error')) { clearInterval(timer); send({error:'blocked'}); return; }
+            if (x) hook(x);
+            if (sent || tries > 60) { clearInterval(timer); if (!sent) send({error:'timeout'}); }
+          }, 150);
+        })();
+        """
+        config.userContentController.addUserScript(WKUserScript(source: control, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+
         let web = WKWebView(frame: frame, configuration: config)
         web.wantsLayer = true
         web.layer?.cornerRadius = 14
         web.layer?.masksToBounds = true
-        let html = """
-        <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-        <style>html,body{margin:0;height:100%;background:#000;overflow:hidden}#p{width:100%;height:100%}</style></head>
-        <body><div id="p"></div><script>
-        var ID="\(yt.videoId)", START=\(yt.start), VOL=\(yt.volume), player, played=false;
-        function send(m){ try{ webkit.messageHandlers.yt.postMessage(m); }catch(e){} }
-        var tag=document.createElement('script'); tag.src='https://www.youtube.com/iframe_api';
-        tag.onerror=function(){ send({error:'offline'}); };
-        document.head.appendChild(tag);
-        function onYouTubeIframeAPIReady(){
-          player=new YT.Player('p',{width:'100%',height:'100%',videoId:ID,
-            playerVars:{autoplay:1,start:START,playsinline:1,rel:0,controls:1},
-            events:{
-              onReady:function(e){ e.target.setVolume(VOL); e.target.seekTo(START,true); e.target.playVideo(); },
-              onStateChange:function(e){
-                if(e.data===1&&!played){ played=true; send({playing:true}); }
-                if(e.data===0){ player.seekTo(START,true); player.playVideo(); }
-              },
-              onError:function(e){ send({error:String(e.data)}); }
-            }});
-        }
-        setTimeout(function(){ if(!played) send({error:'timeout'}); }, 9000);
-        </script></body></html>
-        """
+        var comps = URLComponents(string: "https://www.youtube.com/embed/\(yt.videoId)")!
+        comps.queryItems = [
+            URLQueryItem(name: "autoplay", value: "1"),
+            URLQueryItem(name: "start", value: String(yt.start)),
+            URLQueryItem(name: "playsinline", value: "1"),
+            URLQueryItem(name: "rel", value: "0"),
+        ]
+        var req = URLRequest(url: comps.url!)
         // YouTube는 삽입 플레이어를 쓰는 앱이 Referer로 자신을 밝히도록 요구해요.
-        web.loadHTMLString(html, baseURL: URL(string: "https://local.kkh.charactertimer/"))
+        req.setValue("https://local.kkh.charactertimer/", forHTTPHeaderField: "Referer")
+        web.load(req)
         return web
     }
 
@@ -363,7 +386,7 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
     @objc private func tap(_ sender: NSButton) {
         let id = sender.identifier?.rawValue ?? "ok"
         if id == "setStart", let web = player {
-            web.evaluateJavaScript("window.player && player.getCurrentTime ? player.getCurrentTime() : -1") { [weak self] result, _ in
+            web.evaluateJavaScript("window.__ctTime ? window.__ctTime() : -1") { [weak self] result, _ in
                 let sec = (result as? Double) ?? Double(result as? Int ?? -1)
                 self?.close()
                 self?.onStartPicked?(sec)
@@ -489,6 +512,9 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         case "dismiss":
             overlay.close()
             sound.stop()
+        case "badge":
+            let text = body["text"] as? String ?? ""
+            NSApp.dockTile.badgeLabel = text.isEmpty ? nil : text
         case "onTop":
             window?.level = (body["value"] as? Bool ?? false) ? .floating : .normal
         case "alarm":
@@ -739,6 +765,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
                           styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                           backing: .buffered, defer: false)
         window.title = "캐릭터 타이머"
+        window.isReleasedWhenClosed = false
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.backgroundColor = .black
@@ -759,9 +786,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.reveal() }   // 혹시 늦어지면 그냥 띄우기
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { window.makeKeyAndOrderFront(nil) }
+        return true
+    }
+
+    @objc func showMainWindow(_ sender: Any?) {
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
 
     func applicationWillTerminate(_ notification: Notification) {
+        NSApp.dockTile.badgeLabel = nil
         bridge.editor.stop()
         bridge.sound.stop()
         bridge.overlay.close()
@@ -794,6 +832,8 @@ func buildMenu() -> NSMenu {
     let win = NSMenu(title: "윈도우")
     win.addItem(withTitle: "최소화", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
     win.addItem(withTitle: "닫기", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+    win.addItem(.separator())
+    win.addItem(withTitle: "타이머 창 보기", action: #selector(AppDelegate.showMainWindow(_:)), keyEquivalent: "0")
     winItem.submenu = win
 
     return main
