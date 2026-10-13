@@ -236,6 +236,15 @@
   .month-sum small { display: block; font-size: 11px; color: var(--faint); }
   .month-sum b { font-size: 15px; font-weight: 600; }
   .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+  .grid.wds { margin-bottom: 4px; }
+  /* 달력 창은 주가 5줄이든 6줄이든 크기가 같아요. 넘치는 줄은 달력 안에서만 스크롤 */
+  .sheet.cal-sheet { height: min(600px, calc(100vh - 72px)); }
+  .sheet.cal-sheet .sheet-body { flex: 1; min-height: 0; overflow: hidden; display: flex; }
+  .cal-sheet .cal { flex: 1; min-height: 0; }
+  .cal-sheet .cal > div:first-child { display: flex; flex-direction: column; min-height: 0; }
+  .cal-sheet .grid-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; border-radius: 12px; }
+  .cal-sheet .day { aspect-ratio: auto; height: 62px; }
+  .cal-sheet .detail { min-height: 0; overflow-y: auto; }
   .grid .wd { text-align: center; font-size: 11px; color: var(--faint); padding-bottom: 4px; }
   .grid .wd:first-child { color: rgba(255,120,120,.7); }
   .day {
@@ -1216,6 +1225,7 @@ function openSheet(title, render) {
   $("#sheetTitle").textContent = title;
   $("#sheetExtra").innerHTML = "";
   sheetRender = render;
+  $(".sheet").classList.toggle("cal-sheet", render === renderCalendar);   // 달력은 창 크기 고정
   $("#sheetWrap").hidden = false;
   render();
   $("#sheetClose").focus();
@@ -1273,7 +1283,8 @@ function renderCalendar() {
           <div><small>하루 평균</small><b class="num">${fmtDur(studied ? monthTotal / studied : 0)}</b></div>
           <div><small>최고 기록</small><b class="num">${fmtDur(best)}</b></div>
         </div>
-        <div class="grid">${DAYS.map((d) => `<div class="wd">${d}</div>`).join("")}${cells.join("")}</div>
+        <div class="grid wds">${DAYS.map((d) => `<div class="wd">${d}</div>`).join("")}</div>
+        <div class="grid-scroll"><div class="grid">${cells.join("")}</div></div>
       </div>
       <div class="detail" id="dayDetail"></div>
     </div>`;
