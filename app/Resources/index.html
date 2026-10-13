@@ -338,6 +338,75 @@
   .check { width: 22px; height: 22px; accent-color: var(--pin); cursor: pointer; }
   .empty-alarm { padding: 24px; text-align: center; color: var(--faint); border-radius: 16px; border: 1.5px dashed rgba(255,255,255,.18); }
 
+  /* ───────── 알람 창 ───────── */
+  .sheet-head { gap: 12px; }
+  .sheet-extra { margin-left: auto; }
+  .sheet-extra:empty { display: none; }
+  .paste {
+    display: flex; align-items: center; gap: 8px;
+    height: 52px; padding: 0 8px 0 16px; border-radius: 26px;
+    background: rgba(255,255,255,.07); box-shadow: inset 0 0 0 .5px var(--line);
+    transition: box-shadow .2s, background .2s;
+  }
+  .paste:focus-within { background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.45); }
+  .paste-ic { width: 18px; height: 18px; color: var(--faint); flex: none; }
+  .paste-ic svg { width: 100%; height: 100%; }
+  .paste input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; font-size: 15px; outline: none; }
+  .paste input::placeholder { color: var(--faint); }
+  .paste .soft { height: 36px; padding: 0 16px; }
+  .paste-sep { width: 1px; height: 22px; background: var(--line); }
+  .paste + .yt-hint { margin: 10px 4px 0; }
+  .tiles-head { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin: 18px 2px 10px; min-height: 20px; }
+  .tiles-head .search { width: 220px; margin: 0; height: 34px; }
+  .tiles-head.empty { min-height: 0; margin: 16px 0 0; }
+  .tiles-head.empty > * { display: none; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 14px; }
+  .tile {
+    position: relative; padding: 8px 8px 12px; border-radius: 20px; cursor: pointer;
+    background: rgba(255,255,255,.04);
+    transition: background .2s, transform .15s, box-shadow .2s;
+    outline: none;
+  }
+  .tile:hover { background: rgba(255,255,255,.08); }
+  .tile:active { transform: scale(.985); }
+  .tile:focus-visible { box-shadow: 0 0 0 2px rgba(255,255,255,.8); }
+  .tile.sel { background: rgba(224,38,44,.12); box-shadow: inset 0 0 0 1.5px var(--pin); }
+  .thumb { position: relative; aspect-ratio: 16 / 9; border-radius: 13px; overflow: hidden; background: rgba(255,255,255,.06); }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .art-ph {
+    position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255,255,255,.85);
+    background: linear-gradient(135deg, hsl(var(--h, 0) 55% 42%), hsl(calc(var(--h, 0) + 40) 60% 22%));
+  }
+  .art-ph.sys { background: linear-gradient(135deg, #3a3a42, #1d1d22); }
+  .art-ph svg { width: 26px; height: 26px; }
+  .t-play, .t-del, .t-check { position: absolute; display: grid; place-items: center; border-radius: 50%; transition: opacity .18s, transform .18s; }
+  .t-play {
+    left: 50%; top: 50%; width: 42px; height: 42px; margin: -21px 0 0 -21px;
+    background: rgba(0,0,0,.45); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    box-shadow: inset 0 0 0 .5px rgba(255,255,255,.35); opacity: 0; transform: scale(.9);
+  }
+  .t-play svg { width: 14px; height: 14px; }
+  .t-del { right: 6px; top: 6px; width: 24px; height: 24px; background: rgba(0,0,0,.55); opacity: 0; }
+  .t-del svg { width: 10px; height: 10px; }
+  .tile:hover .t-play, .tile.on .t-play, .t-play:focus-visible { opacity: 1; transform: scale(1); }
+  .tile:hover .t-del, .t-del:focus-visible { opacity: 1; }
+  .tile.on .t-play { background: var(--pin); box-shadow: none; }
+  .t-check { left: 6px; top: 6px; width: 22px; height: 22px; background: var(--pin); color: #fff; opacity: 0; transform: scale(.6); }
+  .t-check svg { width: 12px; height: 12px; }
+  .tile.sel .t-check { opacity: 1; transform: scale(1); }
+  .t-title { margin: 10px 4px 0; font-size: 13px; font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.7em; }
+  .t-rename { width: 100%; font: inherit; border: 0; border-radius: 6px; padding: 2px 4px; background: rgba(255,255,255,.14); color: #fff; outline: none; }
+  .t-meta { margin: 4px 4px 0; font-size: 11px; color: var(--faint); }
+  .empty-alarm { grid-column: 1 / -1; }
+  .nowbar {
+    position: sticky; bottom: 0; margin-top: 16px; z-index: 2;
+    display: grid; grid-template-columns: auto minmax(80px, 160px) 1fr auto auto 28px; gap: 12px; align-items: center;
+    padding: 10px 12px 10px 10px; border-radius: 22px; background: rgba(30,30,36,.82);
+    animation: rise .2s ease;
+  }
+  .nowbar[hidden] { display: none; }
+  .now-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
   /* 브라우저에서 열었을 때 쓰는 알림 창 (앱에서는 Mac 알림 창이 대신 떠요) */
   .alert {
     position: fixed; top: 16px; left: 50%; z-index: 30; transform: translateX(-50%);
@@ -379,25 +448,27 @@
     .stat-val { font-size: 26px; }
     .stats .bars { min-height: 40px; }
   }
-  /* ───────── 켜질 때: 배경이 선명해지고, 시계와 카드가 차례로 올라와요 ───────── */
-  .app.booting .bg-blur { transition: opacity 1s ease; }
-  .app.booting .art img { transition: opacity .9s ease, transform 1.6s cubic-bezier(.16,.8,.24,1), filter 1.1s ease; }
-  .app.booting .date, .app.booting .tools, .app.booting .clock,
+  /* ───────── 켜질 때: 캐릭터가 초점을 잡으며 들어오고, 시계가 올라오고, 유리 카드가 맺혀요 ───────── */
+  .clock-wrap { overflow: hidden; margin: -4px 0 6px; padding-bottom: 4px; }
+  .clock-wrap .clock { margin: 0; }
+  .app.booting .bg-blur { transition: opacity 1.2s ease; }
+  .app.booting .dim { transition: opacity 1.2s ease; }
+  .app.booting .art img { transition: opacity 1s ease, transform 1.8s cubic-bezier(.16,.84,.24,1), filter 1.3s ease; }
+  .app.booting .date, .app.booting .tools { transition: opacity .7s ease .55s, transform .9s cubic-bezier(.16,.84,.24,1) .55s; }
+  .app.booting .clock { transition: transform 1s cubic-bezier(.16,.84,.24,1) .35s; }
   .app.booting .timer, .app.booting .stats > .card {
-    transition: opacity .7s ease, transform .9s cubic-bezier(.16,.8,.24,1);
+    transition: opacity .8s ease, transform 1s cubic-bezier(.16,.84,.24,1), filter .9s ease;
   }
-  .app.booting .date { transition-delay: .18s; }
-  .app.booting .tools { transition-delay: .26s; }
-  .app.booting .clock { transition-delay: .24s; }
-  .app.booting .timer { transition-delay: .42s; }
-  .app.booting .stats > .card:nth-child(1) { transition-delay: .54s; }
-  .app.booting .stats > .card:nth-child(2) { transition-delay: .62s; }
-  .app.booting .ring .bar { transition: stroke-dashoffset 1.3s cubic-bezier(.16,.8,.24,1) .6s; }
+  .app.booting .timer { transition-delay: .6s; }
+  .app.booting .stats > .card:nth-child(1) { transition-delay: .74s; }
+  .app.booting .stats > .card:nth-child(2) { transition-delay: .84s; }
+  .app.booting .ring .bar { transition: stroke-dashoffset 1.4s cubic-bezier(.16,.84,.24,1) 1s; }
   .app.boot .bg-blur { opacity: 0; }
-  .app.boot .art img { opacity: 0; transform: scale(1.07); filter: blur(14px); }
-  .app.boot .date, .app.boot .tools { opacity: 0; transform: translateY(-8px); }
-  .app.boot .clock { opacity: 0; transform: translateY(18px) scale(.98); }
-  .app.boot .timer, .app.boot .stats > .card { opacity: 0; transform: translateY(22px); }
+  .app.boot .dim { opacity: 1; }
+  .app.boot .art img { opacity: 0; transform: translateX(-36px) scale(1.08); filter: blur(18px) brightness(.55); }
+  .app.boot .date, .app.boot .tools { opacity: 0; transform: translateY(-10px); }
+  .app.boot .clock { transform: translateY(108%); }
+  .app.boot .timer, .app.boot .stats > .card { opacity: 0; transform: translateY(26px) scale(.965); filter: blur(10px); }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -434,7 +505,7 @@
       </nav>
     </header>
 
-    <div class="clock num" id="clock"></div>
+    <div class="clock-wrap"><div class="clock num" id="clock"></div></div>
 
     <section class="card glass timer" aria-label="타이머">
       <div class="timer-head">
@@ -486,6 +557,7 @@
     <div class="sheet glass" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
       <div class="sheet-head">
         <h2 id="sheetTitle"></h2>
+        <div class="sheet-extra" id="sheetExtra"></div>
         <button class="close" id="sheetClose" aria-label="닫기">
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 2l10 10M12 2L2 12"/></svg>
         </button>
@@ -1013,12 +1085,13 @@ document.addEventListener("keydown", (e) => {
 let sheetRender = null;
 function openSheet(title, render) {
   $("#sheetTitle").textContent = title;
+  $("#sheetExtra").innerHTML = "";
   sheetRender = render;
   $("#sheetWrap").hidden = false;
   render();
   $("#sheetClose").focus();
 }
-function closeSheet() { $("#sheetWrap").hidden = true; sheetRender = null; stopPreview(); closeEditor(); }
+function closeSheet() { $("#sheetWrap").hidden = true; sheetRender = null; stopPreview(); closeNowbar(); }
 $("#sheetClose").onclick = closeSheet;
 $("#sheetWrap").addEventListener("mousedown", (e) => { if (e.target.id === "sheetWrap") closeSheet(); });
 
@@ -1262,19 +1335,26 @@ function alarmSummary() {
   const s = state.settings;
   if (s.alarmMode === "random") {
     const n = state.alarms.filter((a) => a.use).length;
-    return n ? `랜덤: 체크한 알람 ${n}개 중 하나` : "랜덤: 체크한 알람이 없어서 기본 소리(Glass)";
+    return n ? `랜덤 ${n}곡` : "랜덤 (고른 곡 없음)";
   }
   if (s.alarmPick === "none") return "소리 없음";
-  if (s.alarmPick.startsWith("sys:")) return `Mac 기본 소리 ${s.alarmPick.slice(4)}`;
-  const a = state.alarms.find((x) => "a:" + x.id === s.alarmPick);
-  return a ? a.title : "Mac 기본 소리 Glass";
+  const a = s.alarmPick.startsWith("a:") && state.alarms.find((x) => "a:" + x.id === s.alarmPick);
+  return a ? a.title : "기본 알림음";
 }
 
-/* ════════════════ 알람 목록 ════════════════ */
+/* ════════════════ 알람 ════════════════ */
 $("#openAlarms").onclick = () => openSheet("알람", renderAlarms);
+
+const LINK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>';
+const BELL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
+const CHECK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
 let alarmQuery = "";
-let previewing = null;
-let ytDraft = null;       // { videoId, start, title, status }
+let previewing = null;      // 유튜브·기본음 미리 듣기 중인 id
+let listening = null;       // 아래 재생 막대에 올린 파일 알람 id
+let editPos = { t: 0, playing: false, duration: 0 };
+let scrubbing = false;
+let ytDraft = null;         // { videoId, start, title, status }
 
 /* 유튜브 링크 → 영상 id, 시작 시각(t=) */
 function parseYouTube(text) {
@@ -1291,7 +1371,8 @@ function parseYouTube(text) {
     if (!id && m) id = m[2];
   }
   if (!id || !/^[A-Za-z0-9_-]{11}$/.test(id)) return null;
-  return { videoId: id, start: parseTime(u.searchParams.get("t") || u.searchParams.get("start") || "") };
+  const st = parseTime(u.searchParams.get("t") || u.searchParams.get("start") || "");
+  return { videoId: id, start: Number.isNaN(st) ? 0 : st };
 }
 /* "1:35", "95", "95s", "1m35s" → 초 */
 function parseTime(v) {
@@ -1303,33 +1384,33 @@ function parseTime(v) {
   return m ? (Number(m[1] || 0) * 3600 + Number(m[2] || 0) * 60 + Number(m[3] || 0)) : NaN;
 }
 const ytThumb = (id) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+const hueOf = (s) => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+
+const isPicked = (a) => state.settings.alarmMode === "random" ? !!a.use : state.settings.alarmPick === "a:" + a.id;
 
 function renderAlarms() {
   const s = state.settings;
+  $("#sheetExtra").innerHTML = `
+    <div class="seg" role="tablist" aria-label="알람 방식">
+      <button role="tab" data-amode="single" aria-selected="${s.alarmMode === "single"}">하나만</button>
+      <button role="tab" data-amode="random" aria-selected="${s.alarmMode === "random"}">랜덤</button>
+    </div>`;
   $("#sheetBody").innerHTML = `
-    <div class="alarm-top">
-      <div class="seg" role="tablist" aria-label="알람 방식">
-        <button role="tab" data-amode="random" aria-selected="${s.alarmMode === "random"}">랜덤 재생</button>
-        <button role="tab" data-amode="single" aria-selected="${s.alarmMode === "single"}">하나만 쓰기</button>
-      </div>
-      ${s.alarmMode === "random" ? `<span class="hint num">${state.alarms.filter((a) => a.use).length}곡</span>` : ""}
-      ${s.alarmMode === "single" ? `<select class="field" data-syspick aria-label="Mac 기본 소리" style="width:auto;margin-left:auto">
-          <option value="" ${s.alarmPick.startsWith("a:") ? "selected" : ""}>목록에서 고른 알람</option>
-          <option value="none" ${s.alarmPick === "none" ? "selected" : ""}>소리 없음</option>
-          ${SYSTEM_SOUNDS.map((n) => `<option value="sys:${n}" ${s.alarmPick === "sys:" + n ? "selected" : ""}>Mac 기본 소리: ${n}</option>`).join("")}
-        </select>` : ""}
-    </div>
-    <form class="alarm-add" id="ytForm" autocomplete="off">
-      <input class="field" name="url" id="ytUrl" placeholder="유튜브 링크" aria-label="유튜브 링크">
-      <input class="field" name="title" id="ytTitle" placeholder="제목" maxlength="40" aria-label="알람 제목">
-      <input class="field num" name="start" id="ytStart" placeholder="0:00" aria-label="시작 지점 (분:초)">
-      <button class="soft" type="submit">추가</button>
-      ${NATIVE ? `<button class="soft" type="button" data-addfile>파일 추가</button>` : ""}
+    <form class="paste" id="ytForm" autocomplete="off">
+      <span class="paste-ic" aria-hidden="true">${LINK_ICON}</span>
+      <input id="ytUrl" placeholder="유튜브 링크 붙여넣기" aria-label="유튜브 링크">
+      <button class="soft" type="submit" id="ytAdd" disabled>추가</button>
+      ${NATIVE ? `<span class="paste-sep" aria-hidden="true"></span><button class="soft" type="button" data-addfile>파일</button>` : ""}
     </form>
     <div class="yt-hint" id="ytHint"></div>
-    <input class="field search" id="alarmSearch" type="search" placeholder="검색" value="${esc(alarmQuery)}" aria-label="알람 검색">
-    <div class="alarm-list" id="alarmList"></div>`;
+    <div class="tiles-head">
+      <span class="hint num" id="pickCount"></span>
+      ${state.alarms.length > 5 ? `<input class="field search" id="alarmSearch" type="search" placeholder="검색" value="${esc(alarmQuery)}" aria-label="알람 검색">` : ""}
+    </div>
+    <div class="tiles" id="alarmList"></div>
+    <div class="nowbar glass" id="nowbar" hidden></div>`;
   renderAlarmList();
+  renderNowbar();
 }
 
 function renderAlarmList() {
@@ -1337,77 +1418,83 @@ function renderAlarmList() {
   const single = s.alarmMode === "single";
   const q = alarmQuery.trim().toLowerCase();
   const list = state.alarms.filter((a) => !q || a.title.toLowerCase().includes(q));
-  if (!state.alarms.length) {
-    $("#alarmList").innerHTML = `<div class="empty-alarm">알람 없음</div>`;
-    return;
-  }
-  if (!list.length) {
-    $("#alarmList").innerHTML = `<div class="empty-alarm">결과 없음</div>`;
-    return;
-  }
-  $("#alarmList").innerHTML = list.map((a) => {
-    const picked = single && s.alarmPick === "a:" + a.id;
-    const on = previewing === a.id;
-    const where = a.kind === "yt" ? "YouTube" : fmtClock(a.duration || 0);
-    return `<div class="alarm ${single ? "single" : ""} ${picked ? "picked" : ""}">
-      ${single ? "" : `<input type="checkbox" class="check" data-use="${a.id}" ${a.use ? "checked" : ""} aria-label="${esc(a.title)} 랜덤에 넣기">`}
-      ${a.kind === "yt" ? `<img class="thumb" src="${ytThumb(a.videoId)}" alt="">` : `<span class="thumb">${NOTE_ICON}</span>`}
-      <div class="meta">
-        <input value="${esc(a.title)}" data-arename="${a.id}" maxlength="40" aria-label="알람 제목">
-        <small>${where}</small>
+  const n = state.alarms.filter((a) => a.use).length;
+  $("#pickCount").textContent = single ? "" : n ? `${n}곡 중 랜덤` : "고른 곡이 없으면 기본 알림음";
+  $(".tiles-head").classList.toggle("empty", single && !$("#alarmSearch"));
+
+  const sysTile = single && !q ? `
+    <div class="tile ${s.alarmPick.startsWith("sys:") || s.alarmPick === "none" ? "sel" : ""} ${previewing === "sys" ? "on" : ""}" data-tile="sys" role="button" tabindex="0" aria-label="기본 알림음">
+      <div class="thumb"><span class="art-ph sys">${BELL_ICON}</span>
+        <button class="t-play" data-play="sys" aria-label="기본 알림음 듣기">${PLAY_ICON}</button>
+        <span class="t-check" aria-hidden="true">${CHECK_ICON}</span>
       </div>
-      <button class="soft chip-time num" data-aedit="${a.id}" aria-pressed="${editing === a.id}" aria-label="시작 지점 ${fmtClock(a.start || 0)}, 들으면서 바꾸기">${fmtClock(a.start || 0)}</button>
-      <button class="soft play" data-apreview="${a.id}" aria-pressed="${on}" aria-label="${esc(a.title)} ${on ? "멈추기" : "미리 듣기"}">${on ? STOP_ICON : PLAY_ICON}</button>
-      ${single ? `<button class="soft" data-apick="${a.id}" aria-pressed="${picked}">${picked ? "사용 중" : "이걸로"}</button>` : `<span></span>`}
-      <button class="x close" data-adel="${a.id}" aria-label="${esc(a.title)} 지우기" style="width:28px;height:28px">${X_ICON}</button>
-    </div>${editing === a.id && a.kind === "file" ? editorHTML(a) : ""}`;
+      <div class="t-title">기본 알림음</div>
+      <div class="t-meta">Mac</div>
+    </div>` : "";
+
+  const tiles = list.map((a) => {
+    const sel = isPicked(a);
+    const playing = (previewing === a.id) || (listening === a.id && editPos.playing);
+    return `<div class="tile ${sel ? "sel" : ""} ${playing || listening === a.id ? "on" : ""}" data-tile="${a.id}" role="button" tabindex="0" aria-pressed="${sel}" aria-label="${esc(a.title)}">
+      <div class="thumb">
+        ${a.kind === "yt" ? `<img src="${ytThumb(a.videoId)}" alt="" loading="lazy">` : `<span class="art-ph" style="--h:${hueOf(a.title)}">${NOTE_ICON}</span>`}
+        <button class="t-play" data-play="${a.id}" aria-label="${esc(a.title)} ${playing ? "멈추기" : "듣기"}">${playing ? PAUSE_ICON : PLAY_ICON}</button>
+        <button class="t-del" data-adel="${a.id}" aria-label="${esc(a.title)} 지우기">${X_ICON}</button>
+        <span class="t-check" aria-hidden="true">${CHECK_ICON}</span>
+      </div>
+      <div class="t-title" data-title="${a.id}">${esc(a.title)}</div>
+      <div class="t-meta num">${a.kind === "yt" ? "YouTube" : fmtClock(a.duration || 0)}${a.start ? ` · ${fmtClock(a.start)}부터` : ""}</div>
+    </div>`;
   }).join("");
+
+  $("#alarmList").innerHTML = sysTile + tiles ||
+    `<div class="empty-alarm">${q ? "결과 없음" : "링크를 붙여넣거나 파일을 추가하세요"}</div>`;
 }
 
-/* ════════ 들으면서 시작 지점 정하기 (파일) ════════ */
-let editing = null;                       // 편집 중인 알람 id
-let editPos = { t: 0, playing: false, duration: 0 };
-let scrubbing = false;
-
-function editorHTML(a) {
+/* ── 아래 재생 막대 (파일 알람을 들으며 시작 지점 정하기) ── */
+function renderNowbar() {
+  const bar = $("#nowbar");
+  if (!bar) return;
+  const a = state.alarms.find((x) => x.id === listening);
+  if (!a) { bar.hidden = true; bar.innerHTML = ""; return; }
   const d = a.duration || editPos.duration || 1;
-  return `<div class="editor" id="editor">
+  bar.hidden = false;
+  bar.innerHTML = `
     <button class="soft play big" data-eplay aria-label="${editPos.playing ? "멈추기" : "재생"}">${editPos.playing ? PAUSE_ICON : PLAY_ICON}</button>
+    <div class="now-title">${esc(a.title)}</div>
     <div class="scrub" style="--start:${((a.start || 0) / d) * 100}%">
       <input type="range" id="escrub" min="0" max="${d.toFixed(1)}" step="0.1" value="${editPos.t.toFixed(1)}" aria-label="재생 위치">
       <i class="start-mark" aria-hidden="true"></i>
     </div>
     <span class="num etime" id="etime">${fmtClock(editPos.t)} / ${fmtClock(d)}</span>
-    <button class="soft" data-enudge="-1" aria-label="1초 앞으로">−1</button>
-    <button class="soft" data-enudge="1" aria-label="1초 뒤로">+1</button>
     <button class="btn primary sm" data-esetstart>여기서 시작</button>
-  </div>`;
+    <button class="x close" data-nowclose aria-label="닫기" style="width:28px;height:28px">${X_ICON}</button>`;
 }
-function openEditor(a) {
-  if (editing === a.id) { closeEditor(); return; }
-  closeEditor();
-  stopPreview();
-  if (a.kind === "yt") { previewAlarm(a.id); return; }        // 유튜브는 미리 듣기 창에서 정해요
-  editing = a.id;
-  editPos = { t: a.start || 0, playing: false, duration: a.duration || 0 };
-  post("editLoad", { file: a.file, t: a.start || 0 });
-  renderAlarmList();
-}
-function closeEditor() {
-  if (!editing) return;
-  editing = null;
+function closeNowbar() {
+  if (!listening) return;
+  listening = null;
   editPos.playing = false;
   post("editStop");
+  renderNowbar();
 }
 window.__editPos = (p) => {
+  const wasPlaying = editPos.playing;
   editPos = { t: p.t, playing: p.playing, duration: p.duration || editPos.duration };
-  if (sheetRender !== renderAlarms || !$("#editor")) return;
+  if (sheetRender !== renderAlarms || !$("#nowbar") || $("#nowbar").hidden) return;
   if (!scrubbing) $("#escrub").value = p.t.toFixed(1);
   $("#etime").textContent = `${fmtClock(p.t)} / ${fmtClock(editPos.duration)}`;
-  const btn = $("#editor [data-eplay]");
+  const btn = $("#nowbar [data-eplay]");
   btn.innerHTML = p.playing ? PAUSE_ICON : PLAY_ICON;
   btn.setAttribute("aria-label", p.playing ? "멈추기" : "재생");
+  if (wasPlaying !== p.playing) renderAlarmList();
 };
+
+function stopPreview() {
+  if (!previewing) return;
+  previewing = null;
+  post("stopSound");
+}
+window.__previewClosed = () => { previewing = null; if (sheetRender === renderAlarms) renderAlarmList(); };
 window.__startPicked = ({ id, sec }) => {
   const a = state.alarms.find((x) => x.id === id);
   if (!a) return;
@@ -1417,42 +1504,110 @@ window.__startPicked = ({ id, sec }) => {
   toast(`${fmtClock(a.start)}부터`);
 };
 
-function stopPreview() {
-  if (!previewing) return;
-  previewing = null;
-  post("stopSound");
-}
-function previewAlarm(id) {
+/* ▶ 듣기: 유튜브는 맨 위 미리 듣기 창(여기서 시작 버튼 포함), 파일은 아래 재생 막대 */
+function listen(id) {
+  if (id === "sys") {
+    closeNowbar();
+    if (previewing === "sys") { stopPreview(); renderAlarmList(); return; }
+    stopPreview();
+    previewing = "sys";
+    if (NATIVE) post("previewSound", { sound: { type: "system", name: "Glass" }, volume: state.settings.volume });
+    else chime();
+    setTimeout(() => { if (previewing === "sys") { previewing = null; if (sheetRender === renderAlarms) renderAlarmList(); } }, 2500);
+    renderAlarmList();
+    return;
+  }
   const a = state.alarms.find((x) => x.id === id);
   if (!a) return;
-  if (previewing === id) { stopPreview(); renderAlarmList(); return; }
-  previewing = id;
-  closeEditor();
-  if (NATIVE) post("previewSound", { sound: alarmSpec(a), volume: state.settings.volume, alarmId: a.id });
-  else if (a.kind === "yt") window.open(`https://www.youtube.com/watch?v=${a.videoId}&t=${a.start || 0}s`, "_blank");
-  else toast("Mac 앱에서 들을 수 있어요");
-  clearTimeout(window.__previewTimer);
-  window.__previewTimer = setTimeout(() => { previewing = null; if (sheetRender === renderAlarms) renderAlarmList(); }, a.kind === "yt" ? 30000 : 15000);
+  if (a.kind === "yt") {
+    closeNowbar();
+    if (previewing === a.id) { stopPreview(); renderAlarmList(); return; }
+    stopPreview();
+    previewing = a.id;
+    if (NATIVE) post("previewSound", { sound: alarmSpec(a), volume: state.settings.volume, alarmId: a.id });
+    else window.open(`https://www.youtube.com/watch?v=${a.videoId}&t=${a.start || 0}s`, "_blank");
+    renderAlarmList();
+    return;
+  }
+  stopPreview();
+  if (listening === a.id) {
+    if (editPos.playing) post("editPause");
+    else post("editPlay", { file: a.file, t: Number($("#escrub").value), volume: state.settings.volume });
+    return;
+  }
+  closeNowbar();
+  listening = a.id;
+  editPos = { t: a.start || 0, playing: false, duration: a.duration || 0 };
+  renderNowbar();
   renderAlarmList();
+  if (NATIVE) post("editPlay", { file: a.file, t: a.start || 0, volume: state.settings.volume });
+  else toast("Mac 앱에서 들을 수 있어요");
 }
-window.__previewClosed = () => { previewing = null; if (sheetRender === renderAlarms) renderAlarmList(); };
 
-/* 링크를 붙여넣으면 영상 확인하고 제목 채우기 */
+function selectTile(id) {
+  const s = state.settings;
+  if (id === "sys") { s.alarmMode = "single"; s.alarmPick = "sys:Glass"; }
+  else if (s.alarmMode === "random") { const a = state.alarms.find((x) => x.id === id); a.use = !a.use; }
+  else s.alarmPick = "a:" + id;
+  save();
+  // 다시 그리지 않고 표시만 바꿔요(두 번 눌러 이름 바꾸기가 끊기지 않게).
+  $$("#alarmList [data-tile]").forEach((el) => {
+    const tid = el.dataset.tile;
+    const a = state.alarms.find((x) => x.id === tid);
+    const sel = tid === "sys" ? s.alarmMode === "single" && (s.alarmPick.startsWith("sys:") || s.alarmPick === "none") : isPicked(a);
+    el.classList.toggle("sel", sel);
+    el.setAttribute("aria-pressed", String(sel));
+  });
+  const n = state.alarms.filter((a) => a.use).length;
+  $("#pickCount").textContent = s.alarmMode === "single" ? "" : n ? `${n}곡 중 랜덤` : "고른 곡이 없으면 기본 알림음";
+}
+
+function removeAlarm(id) {
+  const a = state.alarms.find((x) => x.id === id);
+  if (!a) return;
+  if (previewing === id) stopPreview();
+  if (listening === id) closeNowbar();
+  state.alarms = state.alarms.filter((x) => x.id !== id);
+  if (state.settings.alarmPick === "a:" + id) state.settings.alarmPick = "sys:Glass";
+  if (a.kind === "file") post("deleteSound", { name: a.file });
+  writeNow();
+  renderAlarms();
+  toast("지웠어요");
+}
+
+/* 제목 두 번 눌러 바꾸기 */
+function startRename(el) {
+  const a = state.alarms.find((x) => x.id === el.dataset.title);
+  if (!a || el.querySelector("input")) return;
+  el.innerHTML = `<input class="t-rename" value="${esc(a.title)}" maxlength="40" aria-label="알람 제목">`;
+  const inp = el.querySelector("input");
+  inp.focus(); inp.select();
+  const done = (keep) => {
+    const v = inp.value.trim();
+    if (keep && v) { a.title = v.slice(0, 40); save(); }
+    renderAlarmList();
+  };
+  inp.addEventListener("keydown", (e) => { if (e.key === "Enter") done(true); if (e.key === "Escape") { e.stopPropagation(); done(false); } });
+  inp.addEventListener("blur", () => done(true), { once: true });
+}
+
+/* 링크를 붙여넣으면 영상 확인하고 제목 가져오기 */
 let ytTimer;
 function onYtInput() {
   const parsed = parseYouTube($("#ytUrl").value);
   const hint = $("#ytHint");
   hint.classList.remove("bad");
+  $("#ytAdd").disabled = !parsed;
   if (!$("#ytUrl").value.trim()) { ytDraft = null; hint.textContent = ""; return; }
   if (!parsed) { ytDraft = null; hint.classList.add("bad"); hint.textContent = "유튜브 링크가 아니에요"; return; }
+  if (ytDraft && ytDraft.videoId === parsed.videoId) return;
   ytDraft = { ...parsed, title: "", status: 0 };
-  if (parsed.start && !$("#ytStart").value) $("#ytStart").value = fmtClock(parsed.start);
   hint.innerHTML = `<img src="${ytThumb(parsed.videoId)}" alt=""><span>확인 중…</span>`;
   clearTimeout(ytTimer);
   ytTimer = setTimeout(() => {
     if (NATIVE) post("ytInfo", { url: `https://www.youtube.com/watch?v=${parsed.videoId}`, videoId: parsed.videoId });
     else window.__ytInfo({ videoId: parsed.videoId, status: 200, title: "" });
-  }, 250);
+  }, 200);
 }
 window.__ytInfo = (info) => {
   if (!ytDraft || info.videoId !== ytDraft.videoId || sheetRender !== renderAlarms) return;
@@ -1460,104 +1615,101 @@ window.__ytInfo = (info) => {
   ytDraft.title = info.title || "";
   const hint = $("#ytHint");
   const img = `<img src="${ytThumb(ytDraft.videoId)}" alt="">`;
-  if (info.status === 200) {
-    if (info.title && !$("#ytTitle").value) $("#ytTitle").value = info.title.slice(0, 40);
-    hint.innerHTML = `${img}<span>${esc(info.title || "영상을 찾았어요")}${info.author ? " · " + esc(info.author) : ""}</span>`;
-  } else if (info.status === 401 || info.status === 403) {
-    hint.classList.add("bad");
-    hint.innerHTML = `${img}<span>재생이 막힌 영상이에요. 같은 곡의 가사·Topic 영상을 써 보세요</span>`;
-  } else if (info.status === 404 || info.status === 400) {
-    hint.classList.add("bad");
-    hint.innerHTML = `${img}<span>영상을 찾을 수 없어요</span>`;
-  } else {
-    hint.innerHTML = `${img}<span>확인하지 못했어요</span>`;
-  }
+  if (info.status === 200) hint.innerHTML = `${img}<span>${esc(info.title || "YouTube 영상")}</span>`;
+  else if (info.status === 401 || info.status === 403) { hint.classList.add("bad"); hint.innerHTML = `${img}<span>재생이 막힌 영상이에요. 같은 곡의 가사·Topic 영상을 써 보세요</span>`; }
+  else if (info.status === 404 || info.status === 400) { hint.classList.add("bad"); hint.innerHTML = `${img}<span>영상을 찾을 수 없어요</span>`; }
+  else hint.innerHTML = `${img}<span>YouTube 영상</span>`;
 };
 
-window.__soundsAdded = ({ added = [], failed = [] }) => {
-  for (const a of added) state.alarms.push({ id: uid(), kind: "file", file: a.file, title: a.label.slice(0, 40), duration: a.duration, start: 0, use: true });
+function addFromLink() {
+  const parsed = parseYouTube($("#ytUrl").value);
+  if (!parsed) { onYtInput(); $("#ytUrl").focus(); return; }
+  if (ytDraft && (ytDraft.status === 401 || ytDraft.status === 403)) { toast("재생이 막힌 영상이에요"); return; }
+  const title = ((ytDraft && ytDraft.videoId === parsed.videoId && ytDraft.title) || "YouTube 영상").slice(0, 40);
+  const a = { id: uid(), kind: "yt", videoId: parsed.videoId, title, start: parsed.start || 0, use: true };
+  state.alarms.unshift(a);
+  if (state.settings.alarmMode === "single") state.settings.alarmPick = "a:" + a.id;
+  ytDraft = null;
   writeNow();
-  if (sheetRender === renderAlarms) renderAlarmList();
+  $("#ytUrl").value = "";
+  $("#ytAdd").disabled = true;
+  $("#ytHint").textContent = "";
+  renderAlarmList();
+  toast("추가했어요");
+}
+
+window.__soundsAdded = ({ added = [], failed = [] }) => {
+  let last = null;
+  for (const a of added) {
+    last = { id: uid(), kind: "file", file: a.file, title: a.label.slice(0, 40), duration: a.duration, start: 0, use: true };
+    state.alarms.unshift(last);
+  }
+  if (last && state.settings.alarmMode === "single") state.settings.alarmPick = "a:" + last.id;
+  writeNow();
+  if (sheetRender === renderAlarms) renderAlarms();
   if (added.length) toast(`${added.length}곡 추가`);
   if (failed.length) setTimeout(() => toast(`재생할 수 없는 파일 ${failed.length}개 제외`), added.length ? 2700 : 0);
 };
 
+/* ── 이벤트 ── */
 $("#sheetBody").addEventListener("input", (e) => {
   if (sheetRender !== renderAlarms) return;
   if (e.target.id === "ytUrl") onYtInput();
   if (e.target.id === "alarmSearch") { alarmQuery = e.target.value; renderAlarmList(); }
   if (e.target.id === "escrub") { scrubbing = true; $("#etime").textContent = `${fmtClock(Number(e.target.value))} / ${fmtClock(editPos.duration)}`; }
 });
+$("#sheetBody").addEventListener("change", (e) => {
+  if (sheetRender !== renderAlarms) return;
+  if (e.target.id === "escrub") { scrubbing = false; post("editSeek", { t: Number(e.target.value) }); }
+});
 $("#sheetBody").addEventListener("submit", (e) => {
   if (e.target.id !== "ytForm") return;
   e.preventDefault();
-  const parsed = parseYouTube($("#ytUrl").value);
-  if (!parsed) { onYtInput(); $("#ytUrl").focus(); return; }
-  const start = parseTime($("#ytStart").value.replace(/^시작\s*/, ""));
-  if (Number.isNaN(start)) { toast("시작은 1:35처럼"); $("#ytStart").focus(); return; }
-  const title = ($("#ytTitle").value.trim() || (ytDraft && ytDraft.title) || "유튜브 알람").slice(0, 40);
-  const a = { id: uid(), kind: "yt", videoId: parsed.videoId, title, start: start || parsed.start || 0, use: true };
-  state.alarms.unshift(a);
-  if (state.settings.alarmMode === "single" && !state.settings.alarmPick.startsWith("a:")) state.settings.alarmPick = "a:" + a.id;
-  ytDraft = null;
-  writeNow();
-  e.target.reset();
-  $("#ytHint").classList.remove("bad");
-  $("#ytHint").textContent = "";
-  toast(`${title} 추가`);
-  renderAlarmList();
+  addFromLink();
 });
-$("#sheetBody").addEventListener("change", (e) => {
+$("#sheetBody").addEventListener("dblclick", (e) => {
   if (sheetRender !== renderAlarms) return;
-  const d = e.target.dataset;
-  if (e.target.id === "escrub") { scrubbing = false; post("editSeek", { t: Number(e.target.value) }); return; }
-  if (d.use) {
-    const a = state.alarms.find((x) => x.id === d.use);
-    if (a) { a.use = e.target.checked; save(); }
-  } else if (d.arename) {
-    const a = state.alarms.find((x) => x.id === d.arename);
-    const v = e.target.value.trim();
-    if (a && v) { a.title = v.slice(0, 40); save(); } else if (a) e.target.value = a.title;
-  } else if (d.syspick !== undefined) {
-    const v = e.target.value;
-    if (v) state.settings.alarmPick = v;
-    else if (!state.settings.alarmPick.startsWith("a:") && state.alarms[0]) state.settings.alarmPick = "a:" + state.alarms[0].id;
-    save(); renderAlarms();
-  }
+  const el = e.target.closest("[data-title]");
+  if (el) startRename(el);
+});
+$("#sheetBody").addEventListener("keydown", (e) => {
+  if (sheetRender !== renderAlarms) return;
+  const tile = e.target.closest("[data-tile]");
+  if (tile && e.target === tile && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); selectTile(tile.dataset.tile); }
 });
 $("#sheetBody").addEventListener("click", (e) => {
   if (sheetRender !== renderAlarms) return;
-  const t = e.target.closest("button");
-  if (!t) return;
-  const d = t.dataset;
-  if (d.amode) { stopPreview(); closeEditor(); state.settings.alarmMode = d.amode; save(); renderAlarms(); }
-  else if (d.aedit) openEditor(state.alarms.find((x) => x.id === d.aedit));
-  else if (d.eplay !== undefined) {
-    const a = state.alarms.find((x) => x.id === editing);
-    if (editPos.playing) post("editPause");
-    else post("editPlay", { file: a.file, t: Number($("#escrub").value), volume: state.settings.volume });
-  } else if (d.enudge) post("editSeek", { t: Math.max(0, Number($("#escrub").value) + Number(d.enudge)) });
-  else if (d.esetstart !== undefined) {
-    const a = state.alarms.find((x) => x.id === editing);
-    a.start = Math.max(0, Math.round(Number($("#escrub").value)));
-    save();
-    toast(`${fmtClock(a.start)}부터`);
-    $("#editor .scrub").style.setProperty("--start", `${(a.start / (a.duration || editPos.duration || 1)) * 100}%`);
-    const chip = $(`[data-aedit="${a.id}"]`); if (chip) chip.textContent = fmtClock(a.start);
+  const b = e.target.closest("button");
+  if (b) {
+    const d = b.dataset;
+    if (d.addfile !== undefined) post("pickSounds");
+    else if (d.play) listen(d.play);
+    else if (d.adel) removeAlarm(d.adel);
+    else if (d.eplay !== undefined) listen(listening);
+    else if (d.nowclose !== undefined) { closeNowbar(); renderAlarmList(); }
+    else if (d.esetstart !== undefined) {
+      const a = state.alarms.find((x) => x.id === listening);
+      if (!a) return;
+      a.start = Math.max(0, Math.round(Number($("#escrub").value)));
+      save();
+      $("#nowbar .scrub").style.setProperty("--start", `${(a.start / (a.duration || editPos.duration || 1)) * 100}%`);
+      renderAlarmList();
+      toast(`${fmtClock(a.start)}부터`);
+    }
+    return;
   }
-  else if (d.addfile !== undefined) post("pickSounds");
-  else if (d.apreview) previewAlarm(d.apreview);
-  else if (d.apick) { state.settings.alarmPick = "a:" + d.apick; save(); renderAlarms(); }
-  else if (d.adel) {
-    const a = state.alarms.find((x) => x.id === d.adel);
-    if (previewing === d.adel) stopPreview();
-    if (editing === d.adel) closeEditor();
-    state.alarms = state.alarms.filter((x) => x.id !== d.adel);
-    if (state.settings.alarmPick === "a:" + d.adel) state.settings.alarmPick = "sys:Glass";
-    if (a && a.kind === "file") post("deleteSound", { name: a.file });
-    writeNow(); renderAlarms();
-    toast("지웠어요");
-  }
+  if (e.target.closest("input")) return;
+  const tile = e.target.closest("[data-tile]");
+  if (tile) selectTile(tile.dataset.tile);
+});
+$("#sheetExtra").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-amode]");
+  if (!b || sheetRender !== renderAlarms) return;
+  state.settings.alarmMode = b.dataset.amode;
+  if (b.dataset.amode === "single" && !state.settings.alarmPick) state.settings.alarmPick = "sys:Glass";
+  save();
+  $$("#sheetExtra [data-amode]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+  renderAlarmList();
 });
 
 $("#sheetBody").addEventListener("click", (e) => {
@@ -1657,8 +1809,15 @@ renderAll();
     }));
   };
   const img = $("#artImg");
-  if (reduce || (img.complete && img.naturalWidth)) go();
-  else { img.addEventListener("load", go, { once: true }); img.addEventListener("error", go, { once: true }); setTimeout(go, 700); }
+  const whenImageReady = () => {
+    if (reduce || (img.complete && img.naturalWidth)) go();
+    else { img.addEventListener("load", go, { once: true }); img.addEventListener("error", go, { once: true }); setTimeout(go, 700); }
+  };
+  // 앱에서는 창이 실제로 화면에 나타난 뒤에 시작해요(그 전에 끝나 버리지 않게).
+  if (NATIVE && !reduce) {
+    window.__appShown = () => setTimeout(whenImageReady, 60);
+    setTimeout(whenImageReady, 2600);
+  } else whenImageReady();
 })();
 </script>
 </body>

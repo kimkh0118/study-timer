@@ -710,6 +710,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
             window.animator().alphaValue = 1
         }
+        // 창이 보이기 시작했으니 화면 안의 시작 모션을 틀어요.
+        bridge.web?.evaluateJavaScript("window.__appShown && window.__appShown()")
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
