@@ -757,7 +757,8 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             let text = body["text"] as? String ?? ""
             NSApp.dockTile.badgeLabel = text.isEmpty ? nil : text
         case "onTop":
-            window?.level = (body["value"] as? Bool ?? false) ? .floating : .normal
+            onTop = body["value"] as? Bool ?? false
+            if normalFrame == nil { window?.level = onTop ? .floating : .normal }   // 간소화 중엔 항상 위
         case "alarm":
             scheduleAlarm(at: body["at"] as? Double)
         case "busy":
@@ -767,6 +768,14 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         default:
             break
         }
+    }
+
+    private var onTop = false
+    /// 웹 화면이 그려지지 않고 검게 남을 때 다시 그리게 해요.
+    func repaintWeb() {
+        guard let web = web else { return }
+        web.needsDisplay = true
+        web.evaluateJavaScript("document.body.style.transform='translateZ(0)';requestAnimationFrame(function(){document.body.style.transform='';})")
     }
 
     /// 간소화: 화면 오른쪽 위 작은 창으로 줄이고, 다시 누르면 원래 크기·위치로.
@@ -780,19 +789,26 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             w.contentMinSize = NSSize(width: 360, height: 160)
             w.styleMask.remove(.resizable)
             w.isMovable = false                     // 간소화 창은 오른쪽 위에 고정
+            w.isMovableByWindowBackground = false
+            w.level = .floating                     // 항상 위에
+            w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]   // 데스크탑을 옮겨도 따라와요
             buttons.forEach { w.standardWindowButton($0)?.isHidden = true }
             let size = NSSize(width: 420, height: 180)
             let vf = (w.screen ?? NSScreen.main)?.visibleFrame ?? w.frame
             w.setFrame(NSRect(x: vf.maxX - size.width - 20, y: vf.maxY - size.height - 20,
                               width: size.width, height: size.height), display: true, animate: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.repaintWeb() }
         } else {
             guard let nf = normalFrame else { return }
             normalFrame = nil
             w.styleMask.insert(.resizable)
             w.isMovable = true
+            w.level = onTop ? .floating : .normal
+            w.collectionBehavior = []
             buttons.forEach { w.standardWindowButton($0)?.isHidden = false }
             w.setFrame(nf, display: true, animate: true)
             w.contentMinSize = NSSize(width: 1000, height: 680)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.repaintWeb() }
         }
     }
 
@@ -1117,6 +1133,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         web.evaluateJavaScript("document.body.style.transform='translateZ(0)';requestAnimationFrame(function(){document.body.style.transform='';})")
     }
     func windowDidMove(_ notification: Notification) { repaint() }
+    func windowDidChangeOcclusionState(_ notification: Notification) { if window.occlusionState.contains(.visible) { repaint() } }
+    func windowDidBecomeKey(_ notification: Notification) { repaint() }
+    /// 화면을 그리는 프로세스가 꺼지면 검은 화면이 되니 다시 불러와요(기록은 저장돼 있어요).
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        bridge.setCompact(false)     // 다시 불러온 화면은 큰 화면으로 시작해요
+        if let url = Bundle.main.url(forResource: "index", withExtension: "html") {
+            webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+        }
+    }
     func windowDidChangeScreen(_ notification: Notification) { repaint() }
     func windowDidChangeBackingProperties(_ notification: Notification) { repaint() }
 
