@@ -367,6 +367,20 @@
   .tiles.small { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
   .tiles.small .thumb { aspect-ratio: 2 / 1; }
   .tiles.small .t-title { font-size: 13px; }
+  .song-results { display: grid; gap: 6px; margin-top: 10px; max-height: 300px; overflow: auto; }
+  .song-results:empty { display: none; }
+  .song-msg, .song-credit { padding: 8px 4px; font-size: 12px; }
+  .song-row { display: grid; grid-template-columns: 48px 1fr auto; gap: 12px; align-items: center; padding: 6px 8px 6px 6px; border-radius: 14px; background: rgba(255,255,255,.04); }
+  .song-row.on { background: rgba(224,38,44,.14); }
+  .song-art { position: relative; width: 48px; height: 48px; border-radius: 10px; overflow: hidden; background: rgba(255,255,255,.08); }
+  .song-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .song-art span { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.35); opacity: 0; transition: opacity .15s; }
+  .song-art span svg { width: 14px; height: 14px; }
+  .song-row:hover .song-art span, .song-row.on .song-art span { opacity: 1; }
+  .song-text { min-width: 0; }
+  .song-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .song-text .hint { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .test-chip { color: var(--pin); }
   .snd-group { margin: 18px 4px 10px; font-size: 12px; font-weight: 700; letter-spacing: .02em; color: var(--dim); }
   .tiles-head + .snd-group { margin-top: 4px; }
   .tile {
@@ -710,9 +724,10 @@ function migrate(raw) {
   delete s.settings.focusSound; delete s.settings.breakSound;
   // v1.8: 유튜브·내 파일 알람은 없애고 앱에 들어 있는 소리로 통일
   if (!Array.isArray(s.settings.alarmSet)) s.settings.alarmSet = [];
-  if (s.settings.alarmPick !== "none" && !/^(b|sys):[A-Za-z]+$/.test(s.settings.alarmPick)) s.settings.alarmPick = "b:morning";
-  s.settings.alarmSet = s.settings.alarmSet.filter((k) => /^(b|sys):[A-Za-z]+$/.test(k));
-  s.alarms = [];
+  s.alarms = s.alarms.filter((a) => a && a.kind === "it" && /^\d+$/.test(String(a.trackId)) && /^https:\/\//.test(a.preview || ""));
+  const keyOk = (k) => /^(b|sys):[A-Za-z]+$/.test(k) || (/^it:\d+$/.test(k) && s.alarms.some((a) => "it:" + a.trackId === k));
+  if (s.settings.alarmPick !== "none" && !keyOk(s.settings.alarmPick)) s.settings.alarmPick = "b:morning";
+  s.settings.alarmSet = s.settings.alarmSet.filter(keyOk);
   if (!Array.isArray(s.subjects) || !s.subjects.length) s.subjects = base.subjects;
   const users = (Array.isArray(raw.wallpapers) ? raw.wallpapers : []).filter((w) => w && w.kind === "user");
   s.wallpapers = [...BUILTIN, ...users];
@@ -893,7 +908,13 @@ const SOUNDS = [
     .map((n) => ({ key: "sys:" + n, kind: "sfx", title: n, spec: { type: "system", name: n, title: n } })),
 ];
 const DEFAULT_SOUND = "b:morning";
-const soundByKey = (k) => SOUNDS.find((x) => x.key === k);
+const KEY_RE = /^((b|sys):[A-Za-z]+|it:\d+)$/;
+/* Apple 미리 듣기(30초)로 추가한 노래 */
+const songEntry = (a) => ({ key: "it:" + a.trackId, kind: "song", title: a.title, sub: a.artist, art: a.art, link: a.link,
+  spec: { type: "stream", url: a.preview, title: a.artist ? `${a.title} - ${a.artist}` : a.title } });
+const songs = () => state.alarms.filter((a) => a.kind === "it").map(songEntry);
+const soundByKey = (k) => songs().find((x) => x.key === k) || SOUNDS.find((x) => x.key === k) || (searchResults.get(k) && songEntry(searchResults.get(k)));
+const searchResults = new Map();   // "it:<id>" → 검색 결과(아직 추가 전)
 const isPickedKey = (k) => state.settings.alarmMode === "random" ? state.settings.alarmSet.includes(k) : state.settings.alarmPick === k;
 function specForPick(pick) {
   if (pick === "none") return { type: "none" };
@@ -1037,7 +1058,8 @@ function renderControls() {
   if (mode() === "timer") {
     const t = state.settings.timerMin;
     adj.innerHTML = [25, 50, 90].map((m) => `<button class="soft" data-min="${m}" aria-pressed="${t === m}">${m}분</button>`).join("")
-      + `<button class="soft" data-step="-5" aria-label="5분 줄이기" ${t <= 5 ? "disabled" : ""}>−</button><button class="soft" data-step="5" aria-label="5분 늘리기" ${t >= 300 ? "disabled" : ""}>+</button>`;
+      + `<button class="soft" data-step="-5" aria-label="5분 줄이기" ${t <= 5 ? "disabled" : ""}>−</button><button class="soft" data-step="5" aria-label="5분 늘리기" ${t >= 300 ? "disabled" : ""}>+</button>`
+      + `<button class="soft test-chip" data-test aria-label="10초 알림 시험">10초</button>`;   // 임시: 알림 시험용
   } else if (mode() === "pomo") {
     const s = state.settings;
     const done = pomoRound - 1 + (run && run.phase === "break" ? 1 : 0);
@@ -1147,6 +1169,11 @@ $("#subjects").onclick = (e) => {
 $("#adjust").onclick = (e) => {
   const b = e.target.closest("button");
   if (!b || run) return;
+  if (b.dataset.test !== undefined) {           // 임시: 10초 뒤 알림이 제대로 뜨는지 시험 (1분 미만이라 기록은 안 남아요)
+    run = { phase: "focus", target: 10, before: 0, startedAt: null, sessionStart: Date.now(), subject: state.settings.subject, test: true };
+    start();
+    return;
+  }
   if (b.dataset.min) state.settings.timerMin = Number(b.dataset.min);
   if (b.dataset.step) state.settings.timerMin = Math.min(300, Math.max(5, state.settings.timerMin + Number(b.dataset.step)));
   save(); renderAll();
@@ -1442,7 +1469,14 @@ function renderAlarms() {
         <input type="range" id="alarmVol" min="0" max="1" step="0.05" value="${s.volume}" aria-label="소리 크기">
       </label>
     </div>
-    <div class="snd-group">음악</div>
+    <form class="paste" id="songForm" autocomplete="off">
+      <span class="paste-ic" aria-hidden="true">${SEARCH_ICON}</span>
+      <input id="songQ" type="search" placeholder="노래 검색 · Apple Music 30초 미리 듣기" aria-label="노래 검색" value="${esc(songQuery)}">
+      <button class="soft" type="submit">검색</button>
+    </form>
+    <div id="songResults" class="song-results"></div>
+    <div id="mySongs"></div>
+    <div class="snd-group">기본 음악</div>
     <div class="tiles" id="musicList"></div>
     <div class="snd-group">효과음</div>
     <div class="tiles small" id="sfxList"></div>`;
@@ -1452,12 +1486,13 @@ function renderAlarms() {
 function soundTile(x) {
   const sel = isPickedKey(x.key);
   const on = previewing === x.key;
-  const art = x.hue != null
-    ? `<span class="art-ph" style="--h:${x.hue}">${NOTE_ICON}</span>`
+  const art = x.art ? `<img src="${esc(x.art)}" alt="" loading="lazy">`
+    : x.hue != null || x.kind === "song" ? `<span class="art-ph" style="--h:${x.hue ?? 340}">${NOTE_ICON}</span>`
     : `<span class="art-ph sys">${BELL_ICON}</span>`;
   return `<div class="tile ${sel ? "sel" : ""} ${on ? "on" : ""}" data-tile="${x.key}" role="button" tabindex="0" aria-pressed="${sel}" aria-label="${esc(x.title)}">
     <div class="thumb">${art}
       <button class="t-play" data-play="${x.key}" aria-label="${esc(x.title)} ${on ? "멈추기" : "듣기"}">${on ? PAUSE_ICON : PLAY_ICON}</button>
+      ${x.kind === "song" ? `<button class="t-del" data-sdel="${x.key}" aria-label="${esc(x.title)} 지우기">${X_ICON}</button>` : ""}
       <span class="t-check" aria-hidden="true">${CHECK_ICON}</span>
     </div>
     <div class="t-title">${esc(x.title)}</div>
@@ -1470,15 +1505,87 @@ function renderAlarmList() {
   const s = state.settings;
   const n = s.alarmSet.length;
   $("#pickCount").textContent = s.alarmMode === "single" ? "" : n ? `${n}개 중 랜덤` : "고른 소리가 없으면 아침 햇살";
+  const mine = songs();
+  $("#mySongs").innerHTML = mine.length ? `<div class="snd-group">내 노래 <span class="hint">· Apple Music 미리 듣기 30초</span></div><div class="tiles">${mine.map(soundTile).join("")}</div>` : "";
+  renderSongResults();
   $("#musicList").innerHTML = SOUNDS.filter((x) => x.kind === "music").map(soundTile).join("");
   $("#sfxList").innerHTML = SOUNDS.filter((x) => x.kind === "sfx").map(soundTile).join("");
 }
 
+let webAudio = null;
 function stopPreview() {
   clearTimeout(previewTimer);
+  if (webAudio) { webAudio.pause(); webAudio = null; }
   if (!previewing) return;
   previewing = null;
   post("stopSound");
+}
+window.__previewFailed = () => {
+  previewing = null;
+  toast("미리 듣기를 불러오지 못했어요. 인터넷 연결을 확인해 주세요");
+  if (sheetRender === renderAlarms) renderAlarmList();
+};
+
+/* ── 노래 검색 (Apple Music 30초 미리 듣기) ── */
+const SEARCH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
+let songQuery = "", songState = "idle", songItems = [], songReq = 0;
+function searchSongs(q) {
+  songQuery = q.trim();
+  if (!songQuery) { songState = "idle"; songItems = []; renderSongResults(); return; }
+  songState = "loading"; renderSongResults();
+  const req = ++songReq;
+  if (NATIVE) post("musicSearch", { term: songQuery, req });
+  else fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(songQuery)}&country=KR&media=music&entity=song&limit=30`)
+    .then((r) => r.json()).then((j) => window.__musicResults({ req, ok: true, items: j.results.filter((r) => r.previewUrl).map((r) => ({
+      id: r.trackId, title: r.trackName, artist: r.artistName, art: (r.artworkUrl100 || "").replace("100x100bb", "300x300bb"), preview: r.previewUrl, link: r.trackViewUrl })) }))
+    .catch(() => window.__musicResults({ req, ok: false, items: [] }));
+}
+window.__musicResults = ({ req, ok, items }) => {
+  if (req !== songReq) return;
+  songItems = items || [];
+  songState = ok ? "done" : "error";
+  searchResults.clear();
+  songItems.forEach((it) => searchResults.set("it:" + it.id, { trackId: it.id, title: it.title, artist: it.artist, art: it.art, preview: it.preview, link: it.link }));
+  renderSongResults();
+};
+function renderSongResults() {
+  const box = $("#songResults");
+  if (!box) return;
+  if (songState === "idle") { box.innerHTML = ""; return; }
+  if (songState === "loading") { box.innerHTML = `<div class="hint song-msg">찾는 중…</div>`; return; }
+  if (songState === "error") { box.innerHTML = `<div class="hint song-msg">검색이 안 돼요. 인터넷 연결을 확인해 주세요</div>`; return; }
+  if (!songItems.length) { box.innerHTML = `<div class="hint song-msg">결과 없음</div>`; return; }
+  box.innerHTML = songItems.map((it) => {
+    const key = "it:" + it.id;
+    const added = state.alarms.some((a) => "it:" + a.trackId === key);
+    const on = previewing === key;
+    return `<div class="song-row ${on ? "on" : ""}">
+      <button class="song-art" data-play="${key}" aria-label="${esc(it.title)} ${on ? "멈추기" : "30초 듣기"}">
+        ${it.art ? `<img src="${esc(it.art)}" alt="" loading="lazy">` : ""}<span>${on ? PAUSE_ICON : PLAY_ICON}</span></button>
+      <div class="song-text"><div class="song-title">${esc(it.title)}</div><div class="hint">${esc(it.artist)}</div></div>
+      <button class="soft" data-sadd="${key}" ${added ? "disabled" : ""}>${added ? "추가됨" : "추가"}</button>
+    </div>`;
+  }).join("") + `<div class="hint song-credit">미리 듣기 제공: Apple Music</div>`;
+}
+function addSong(key) {
+  const r = searchResults.get(key);
+  if (!r || state.alarms.some((a) => "it:" + a.trackId === key)) return;
+  state.alarms.unshift({ id: key, kind: "it", ...r });
+  const s = state.settings;
+  if (s.alarmMode === "random") s.alarmSet = [...new Set([...s.alarmSet, key])];
+  else s.alarmPick = key;
+  save();
+  renderAlarmList();
+  toast(`${r.title} 추가`);
+}
+function removeSong(key) {
+  if (previewing === key) stopPreview();
+  state.alarms = state.alarms.filter((a) => "it:" + a.trackId !== key);
+  const s = state.settings;
+  s.alarmSet = s.alarmSet.filter((k) => k !== key);
+  if (s.alarmPick === key) s.alarmPick = DEFAULT_SOUND;
+  save();
+  renderAlarmList();
 }
 window.__previewClosed = () => { previewing = null; if (sheetRender === renderAlarms) renderAlarmList(); };
 
@@ -1490,10 +1597,11 @@ function listen(key) {
   stopPreview();
   previewing = key;
   if (NATIVE) post("previewSound", { sound: x.spec, volume: state.settings.volume, loop: x.kind === "music" });
+  else if (x.kind === "song") { const au = new Audio(x.spec.url); au.volume = state.settings.volume; au.play(); webAudio = au; }
   else chime();
   clearTimeout(previewTimer);
   previewTimer = setTimeout(() => { if (previewing === key) { stopPreview(); if (sheetRender === renderAlarms) renderAlarmList(); } },
-    x.kind === "music" ? 20000 : 2500);
+    x.kind === "music" ? 20000 : x.kind === "song" ? 31000 : 2500);
   renderAlarmList();
 }
 
@@ -1515,9 +1623,19 @@ $("#sheetBody").addEventListener("click", (e) => {
   if (sheetRender !== renderAlarms) return;
   const b = e.target.closest("button[data-play]");
   if (b) { listen(b.dataset.play); return; }
+  const add = e.target.closest("button[data-sadd]");
+  if (add) { addSong(add.dataset.sadd); return; }
+  const del = e.target.closest("button[data-sdel]");
+  if (del) { removeSong(del.dataset.sdel); return; }
+  if (e.target.closest(".song-results")) return;
   if (e.target.closest("input")) return;
   const tile = e.target.closest("[data-tile]");
   if (tile) selectTile(tile.dataset.tile);
+});
+$("#sheetBody").addEventListener("submit", (e) => {
+  if (e.target.id !== "songForm") return;
+  e.preventDefault();
+  searchSongs($("#songQ").value);
 });
 $("#sheetExtra").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-amode]");

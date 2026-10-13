@@ -58,16 +58,93 @@ final class WallpaperScheme: NSObject, WKURLSchemeHandler {
 }
 
 // ───────── 알람 소리: 시스템 소리 또는 내가 넣은 노래 ─────────
+/// Apple 미리 듣기 주소인지 확인 (https + Apple 서버만)
+func isApplePreview(_ u: URL) -> Bool {
+    guard u.scheme == "https", let h = u.host?.lowercased() else { return false }
+    return h.hasSuffix(".apple.com") || h.hasSuffix(".mzstatic.com")
+}
+
 final class SoundPlayer {
     private var player: AVAudioPlayer?
     private var system: NSSound?
     private var stopTimer: Timer?
+    // Apple 미리 듣기(30초)는 인터넷으로 바로 틀어요
+    private var stream: AVPlayer?
+    private var streamEnd: NSObjectProtocol?
+    private var streamStatus: NSKeyValueObservation?
+    private var ramp: Timer?
+    private var streamToken = 0
+    var onStreamFailed: (() -> Void)?
+
+    private func rampStream(to target: Float, over sec: Double, done: (() -> Void)? = nil) {
+        ramp?.invalidate()
+        guard let p = stream else { done?(); return }
+        let from = p.volume, steps = max(1, Int(sec / 0.05))
+        var i = 0
+        let t = Timer(timeInterval: 0.05, repeats: true) { [weak self] tm in
+            i += 1
+            p.volume = from + (target - from) * Float(i) / Float(steps)
+            if i >= steps { tm.invalidate(); self?.ramp = nil; done?() }
+        }
+        RunLoop.main.add(t, forMode: .common)
+        ramp = t
+    }
+
+    private func playStream(_ u: URL, loop: Bool, volume: Float, fadeIn: Bool) {
+        let item = AVPlayerItem(url: u)
+        let p = AVPlayer(playerItem: item)
+        p.automaticallyWaitsToMinimizeStalling = false
+        p.volume = fadeIn ? 0 : volume
+        stream = p
+        streamToken += 1
+        let token = streamToken
+        streamEnd = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak p] _ in
+            guard loop, let p = p else { return }
+            p.seek(to: .zero); p.play()
+        }
+        streamStatus = item.observe(\.status, options: [.new]) { [weak self] it, _ in
+            if it.status == .failed { DispatchQueue.main.async { if self?.streamToken == token { self?.failStream() } } }
+        }
+        // 8초 안에 시작 못 하면(인터넷 문제 등) 실패로 봐요
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self, weak item] in
+            guard let self = self, self.streamToken == token, let item = item, item.status != .readyToPlay else { return }
+            self.failStream()
+        }
+        p.play()
+        if fadeIn { rampStream(to: volume, over: 1.5) }
+    }
+
+    private func failStream() {
+        stopStream()
+        onStreamFailed?()
+    }
+
+    private func stopStream() {
+        streamToken += 1
+        ramp?.invalidate(); ramp = nil
+        stream?.pause()
+        stream = nil
+        if let o = streamEnd { NotificationCenter.default.removeObserver(o) }
+        streamEnd = nil
+        streamStatus?.invalidate()
+        streamStatus = nil
+    }
 
     /// spec: {type: "system", name} | {type: "file", file, start} | {type: "none"}
     func play(_ spec: [String: Any], loop: Bool, volume: Float, maxSec: Double, fadeIn: Bool = true) {
         stop()
         let type = spec["type"] as? String ?? "system"
         if type == "none" { return }
+
+        if type == "stream", let str = spec["url"] as? String, let u = URL(string: str), isApplePreview(u) {
+            playStream(u, loop: loop, volume: volume, fadeIn: fadeIn)
+            if maxSec > 0 {
+                let t = Timer(timeInterval: maxSec, repeats: false) { [weak self] _ in self?.fadeOutAndStop() }
+                RunLoop.main.add(t, forMode: .common)
+                stopTimer = t
+            }
+            return
+        }
 
         var url: URL?
         if type == "file", let file = spec["file"] as? String, isSafeName(file) { url = soundDir.appendingPathComponent(file) }
@@ -104,13 +181,20 @@ final class SoundPlayer {
     func setVolume(_ v: Float) {
         player?.volume = v
         system?.volume = v
+        if stream != nil { ramp?.invalidate(); ramp = nil; stream?.volume = v }
     }
 
     private var fading = false
     /// 소리가 나는 중인지 (꺼지는 중이면 아니라고 봐요)
-    var isPlaying: Bool { !fading && ((player?.isPlaying ?? false) || (system?.isPlaying ?? false)) }
+    var isPlaying: Bool { !fading && ((player?.isPlaying ?? false) || (system?.isPlaying ?? false) || stream != nil) }
 
     func fadeOutAndStop(_ duration: Double = 1.2) {
+        if stream != nil {
+            fading = true
+            let tok = streamToken
+            rampStream(to: 0, over: duration) { [weak self] in if self?.streamToken == tok { self?.stop() } }
+            return
+        }
         guard let p = player else { stop(); return }
         fading = true
         p.setVolume(0, fadeDuration: duration)
@@ -121,6 +205,7 @@ final class SoundPlayer {
 
     func stop() {
         fading = false
+        stopStream()
         stopTimer?.invalidate()
         stopTimer = nil
         player?.stop()
@@ -534,6 +619,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
     private var previewAlarmId = ""
 
     private var fallbackVolume: Float = 0.8
+    private var ringing = false      // 지금 소리가 진짜 알람인지(미리 듣기가 아니라)
     private var fallbackMaxSec: Double = 30
 
     override init() {
@@ -561,6 +647,15 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             if sec >= 0 { self.sendJS("__startPicked", ["id": self.previewAlarmId, "sec": sec]) }
             self.web?.evaluateJavaScript("window.__previewClosed && window.__previewClosed()")
         }
+        // Apple 미리 듣기를 못 불러오면: 알람이면 기본 소리로 대신 울리고, 미리 듣기면 화면에 알려요.
+        sound.onStreamFailed = { [weak self] in
+            guard let self = self else { return }
+            if self.ringing {
+                self.sound.play(["type": "system", "name": "Glass"], loop: true, volume: self.fallbackVolume, maxSec: self.fallbackMaxSec)
+            } else {
+                self.sendJS("__previewFailed", [:])
+            }
+        }
         editor.onPosition = { [weak self] t, playing, duration in
             self?.sendJS("__editPos", ["t": t, "playing": playing, "duration": duration])
         }
@@ -581,6 +676,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             if let n = body["name"] as? String, isSafeName(n) { try? FileManager.default.removeItem(at: soundDir.appendingPathComponent(n)) }
         case "previewSound":
             volSound.stop()
+            ringing = false
             let spec = body["sound"] as? [String: Any] ?? [:]
             let vol = body["volume"] as? Double ?? 0.8
             if let yt = youTube(spec, volume: vol, maxSec: 0) {
@@ -645,6 +741,11 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         case "dismiss":
             overlay.close()
             sound.stop()
+            ringing = false
+        case "musicSearch":
+            musicSearch(term: body["term"] as? String ?? "", req: body["req"] as? Int ?? 0)
+        case "openURL":
+            if let str = body["url"] as? String, let u = URL(string: str), isApplePreview(u) { NSWorkspace.shared.open(u) }
         case "compact":
             setCompact(body["on"] as? Bool ?? false)
         case "badge":
@@ -700,6 +801,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         fallbackVolume = Float(vol)
         fallbackMaxSec = maxSec
         volSound.stop()
+        ringing = true
 
         // 유튜브는 플레이어가 화면에 보여야 해서, 알림 창을 끈 경우엔 기본 소리로 울려요.
         let yt = showOverlay ? youTube(spec, volume: vol, maxSec: maxSec) : nil
@@ -729,6 +831,32 @@ final class Bridge: NSObject, WKScriptMessageHandler {
     }
 
     /// 유튜브 oEmbed로 영상 제목을 가져오고, 다른 앱 재생이 막힌 영상인지 확인한다(401/403).
+    /// Apple(iTunes) 검색: 노래 제목·가수·앨범 그림·30초 미리 듣기 주소
+    private func musicSearch(term: String, req: Int) {
+        let q = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty, var comps = URLComponents(string: "https://itunes.apple.com/search") else { return }
+        comps.queryItems = [URLQueryItem(name: "term", value: q), URLQueryItem(name: "country", value: "KR"),
+                            URLQueryItem(name: "media", value: "music"), URLQueryItem(name: "entity", value: "song"),
+                            URLQueryItem(name: "limit", value: "30")]
+        guard let u = comps.url else { return }
+        URLSession.shared.dataTask(with: u) { [weak self] data, resp, err in
+            var items: [[String: Any]] = []
+            if let d = data, let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+               let results = j["results"] as? [[String: Any]] {
+                for r in results {
+                    guard let id = r["trackId"] as? Int, let prev = r["previewUrl"] as? String else { continue }
+                    var art = r["artworkUrl100"] as? String ?? ""
+                    art = art.replacingOccurrences(of: "100x100bb", with: "300x300bb")
+                    items.append(["id": id, "title": r["trackName"] as? String ?? "", "artist": r["artistName"] as? String ?? "",
+                                  "art": art, "preview": prev, "link": r["trackViewUrl"] as? String ?? "",
+                                  "ms": r["trackTimeMillis"] as? Int ?? 0])
+                }
+            }
+            let ok = err == nil && (resp as? HTTPURLResponse)?.statusCode == 200
+            self?.sendJS("__musicResults", ["req": req, "ok": ok, "items": items])
+        }.resume()
+    }
+
     private func ytInfo(url: String, videoId: String) {
         guard var comps = URLComponents(string: "https://www.youtube.com/oembed") else { return }
         comps.queryItems = [URLQueryItem(name: "url", value: url), URLQueryItem(name: "format", value: "json")]

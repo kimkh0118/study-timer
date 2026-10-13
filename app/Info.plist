@@ -5,8 +5,8 @@
 	<key>CFBundleName</key><string>캐릭터 타이머</string>
 	<key>CFBundleDisplayName</key><string>캐릭터 타이머</string>
 	<key>CFBundleIdentifier</key><string>local.kkh.charactertimer</string>
-	<key>CFBundleVersion</key><string>1.8.1</string>
-	<key>CFBundleShortVersionString</key><string>1.8.1</string>
+	<key>CFBundleVersion</key><string>1.9.0</string>
+	<key>CFBundleShortVersionString</key><string>1.9.0</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleExecutable</key><string>CharacterTimer</string>
 	<key>CFBundleIconFile</key><string>AppIcon</string>
