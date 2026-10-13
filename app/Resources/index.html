@@ -141,8 +141,14 @@
 
   .big { font-family: var(--round); font-size: clamp(48px, 8.5vh, 76px); font-weight: 600; line-height: 1; letter-spacing: -0.03em; }
   .status { margin-top: 8px; color: var(--dim); font-size: 14px; min-height: 20px; }
-  .adjust { margin-top: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-height: 32px; }
+  .adjust { margin-top: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; min-height: 32px; white-space: nowrap; }
+  .adjust > .soft { padding-left: 12px; padding-right: 12px; flex: none; }
   .adjust.locked { visibility: hidden; }
+  /* −, + 는 항상 한 묶음으로 붙어 있게 */
+  .adjust .stepper { display: inline-flex; gap: 0; flex: none; border-radius: 999px; overflow: hidden; }
+  .adjust .stepper .soft { border-radius: 0; min-width: 34px; padding-left: 10px; padding-right: 10px; }
+  .adjust .stepper .soft:first-child { border-radius: 999px 0 0 999px; }
+  .adjust .stepper .soft:last-child { border-radius: 0 999px 999px 0; border-left: 1px solid rgba(255,255,255,.08); }
   .soft {
     height: 32px; min-width: 32px; padding: 0 12px; border-radius: 999px;
     font-size: 13px; font-weight: 600;
@@ -1047,7 +1053,7 @@ function renderControls() {
   if (mode() === "timer") {
     const t = state.settings.timerMin;
     adj.innerHTML = [25, 50, 90].map((m) => `<button class="soft" data-min="${m}" aria-pressed="${t === m}">${m}분</button>`).join("")
-      + `<button class="soft" data-step="-5" aria-label="5분 줄이기" ${t <= 5 ? "disabled" : ""}>−</button><button class="soft" data-step="5" aria-label="5분 늘리기" ${t >= 300 ? "disabled" : ""}>+</button>`;
+      + `<span class="stepper"><button class="soft" data-step="-5" aria-label="5분 줄이기" ${t <= 5 ? "disabled" : ""}>−</button><button class="soft" data-step="5" aria-label="5분 늘리기" ${t >= 300 ? "disabled" : ""}>+</button></span>`;
   } else if (mode() === "pomo") {
     const s = state.settings;
     const done = pomoRound - 1 + (run && run.phase === "break" ? 1 : 0);
