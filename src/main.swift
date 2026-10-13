@@ -673,6 +673,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             normalFrame = w.frame
             w.contentMinSize = NSSize(width: 360, height: 160)
             w.styleMask.remove(.resizable)
+            w.isMovable = false                     // 간소화 창은 오른쪽 위에 고정
             buttons.forEach { w.standardWindowButton($0)?.isHidden = true }
             let size = NSSize(width: 420, height: 180)
             let vf = (w.screen ?? NSScreen.main)?.visibleFrame ?? w.frame
@@ -682,6 +683,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             guard let nf = normalFrame else { return }
             normalFrame = nil
             w.styleMask.insert(.resizable)
+            w.isMovable = true
             buttons.forEach { w.standardWindowButton($0)?.isHidden = false }
             w.setFrame(nf, display: true, animate: true)
             w.contentMinSize = NSSize(width: 1000, height: 680)
@@ -877,7 +879,8 @@ final class DragStrip: NSView {
     override var mouseDownCanMoveWindow: Bool { true }
     override func mouseDown(with event: NSEvent) {
         let compact = (window?.contentMinSize.width ?? 1000) < 500      // 간소화 창은 두 번 눌러도 커지지 않게
-        if event.clickCount == 2 { if !compact { window?.zoom(nil) } } else { window?.performDrag(with: event) }
+        if compact { return }                                            // 간소화 창은 움직이지 않아요
+        if event.clickCount == 2 { window?.zoom(nil) } else { window?.performDrag(with: event) }
     }
 }
 
