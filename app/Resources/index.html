@@ -57,7 +57,13 @@
   .swatch { width: 28px; height: 28px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); flex: none; position: relative; overflow: hidden; }
   .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px #fff; }
   .swatch.photo { background: linear-gradient(135deg, #8a6a5a, #3a3a52); }
-  .swatch.custom { background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red); }
+  .swatch.custom { background: rgba(255,255,255,.12); display: grid; place-items: center; cursor: pointer; }
+  .swatch.custom span svg { width: 12px; height: 12px; }
+  .swatch.custom span { display: grid; place-items: center; pointer-events: none; }
+  .swatch-wrap { position: relative; display: inline-flex; }
+  .swatch-del { position: absolute; right: -5px; top: -5px; width: 16px; height: 16px; border-radius: 50%; background: rgba(0,0,0,.75); display: grid; place-items: center; opacity: 0; transition: opacity .15s; }
+  .swatch-del svg { width: 7px; height: 7px; }
+  .swatch-wrap:hover .swatch-del { opacity: 1; }
   .swatch.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: 0; padding: 0; }
 
   .art { position: relative; margin: 0; height: 100vh; overflow: hidden; }
@@ -710,7 +716,7 @@ function defaults() {
     settings: {
       goalMin: 240, timerMin: 50,
       focusMin: 25, breakMin: 5, longBreakMin: 15, longEvery: 4,
-      sound: true, onTop: false, dim: 0.15, bgColor: "",
+      sound: true, onTop: false, dim: 0.15, bgColor: "", bgCustom: [],
       overlay: true, alarmMode: "single", alarmPick: "b:morning", alarmSet: [], volume: 0.8, maxSec: 30,
       mode: "timer", subject: subjects[0].id,
     },
@@ -752,6 +758,7 @@ function migrate(raw) {
   if (!s.subjects.some((x) => x.id === s.settings.subject)) s.settings.subject = s.subjects[0].id;
   if (!s.wallpapers.some((w) => w.id === s.wallpaper)) s.wallpaper = "b1";
   if (!s.wallPos || typeof s.wallPos !== "object") s.wallPos = {};
+  if (!Array.isArray(s.settings.bgCustom)) s.settings.bgCustom = [];
   return s;
 }
 
@@ -1053,7 +1060,8 @@ function applyWallpaper() {
   if ($("#miniImg")) { $("#miniImg").src = w.src; $("#miniImg").style.objectPosition = posOf(w); }
 }
 /* 오른쪽 배경 색: ""면 사진을 흐리게 깔고, 색을 고르면 그 색으로 */
-const BG_COLORS = ["#111114", "#2a2a30", "#1b2a44", "#3a1f2b", "#1f3a2e", "#4a3b2a", "#3b2f4f"];
+// 흰 글씨가 잘 보이는 선명한 색들
+const BG_COLORS = ["#000000", "#1f2937", "#1e3a8a", "#2563eb", "#0e7490", "#15803d", "#7c3aed", "#be185d", "#b91c1c", "#c2410c"];
 function applyBgColor() {
   const c = state.settings.bgColor;
   app.classList.toggle("solid-bg", !!c);
@@ -1371,16 +1379,11 @@ function renderWalls() {
         : `<label class="wall add-tile"><span>${PLUS_ICON}사진 추가</span><input type="file" accept="image/*" multiple hidden id="wallFile"></label>`}
     </div>
     <div class="slider-row">
-      <span class="hint">배경 어둡게</span>
-      <input type="range" min="0" max="0.7" step="0.05" value="${state.settings.dim}" id="dimRange" aria-label="배경 어둡게">
+      <span class="hint">배경 밝기</span>
+      <input type="range" min="30" max="100" step="5" value="${Math.round((1 - state.settings.dim) * 100)}" id="dimRange" aria-label="배경 밝기">
       <button class="soft" data-adjustpos style="margin-left:auto">위치 맞추기</button>
     </div>
-    <div class="bg-colors">
-      <span class="hint">오른쪽 배경 색</span>
-      <button class="swatch photo" data-bgc="" aria-pressed="${!state.settings.bgColor}" title="사진에서" aria-label="사진에서"></button>
-      ${BG_COLORS.map((c) => `<button class="swatch" data-bgc="${c}" style="background:${c}" aria-pressed="${state.settings.bgColor === c}" aria-label="${c}"></button>`).join("")}
-      <label class="swatch custom" title="직접 고르기" aria-pressed="${!!state.settings.bgColor && !BG_COLORS.includes(state.settings.bgColor)}"><input type="color" id="bgPick" value="${state.settings.bgColor || "#222228"}" aria-label="직접 고르기"></label>
-    </div>`;
+    <div class="bg-colors" id="bgColors">${bgColorsHTML()}</div>`;
   const fi = $("#wallFile");
   if (fi) fi.onchange = () => {
     [...fi.files].forEach((file) => {
@@ -1389,8 +1392,8 @@ function renderWalls() {
       rd.readAsDataURL(file);
     });
   };
-  $("#bgPick").oninput = (e) => { state.settings.bgColor = e.target.value; applyBgColor(); markSwatch(); save(); };
-  $("#dimRange").oninput = (e) => { state.settings.dim = Number(e.target.value); app.style.setProperty("--dim-amount", state.settings.dim); save(); };
+  bindBgPick();
+  $("#dimRange").oninput = (e) => { state.settings.dim = Math.round((1 - Number(e.target.value) / 100) * 100) / 100; app.style.setProperty("--dim-amount", state.settings.dim); save(); };
 }
 function addWallpapers(items) {
   if (!items || !items.length) return;
@@ -1421,12 +1424,41 @@ $("#sheetBody").addEventListener("click", (e) => {
   } else if (t.dataset.add !== undefined) post("pickWallpapers");
   else if (t.dataset.adjustpos !== undefined) startAdjust();
   else if (t.dataset.bgc !== undefined) { state.settings.bgColor = t.dataset.bgc; applyBgColor(); markSwatch(); save(); }
+  else if (t.dataset.bgdel) {
+    const s = state.settings;
+    s.bgCustom = s.bgCustom.filter((x) => x !== t.dataset.bgdel);
+    if (s.bgColor === t.dataset.bgdel) s.bgColor = "";
+    applyBgColor(); markSwatch(); save();
+  }
 });
 
-function markSwatch() {
+/* 오른쪽 배경 색 줄: 사진에서 · 기본 색 · 내가 추가한 색 · + (색 추가) */
+function bgColorsHTML() {
   const c = state.settings.bgColor;
-  $$(".bg-colors [data-bgc]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.bgc === c)));
-  const cu = $(".swatch.custom"); if (cu) cu.setAttribute("aria-pressed", String(!!c && !BG_COLORS.includes(c)));
+  const sw = (col, mine) => `<span class="swatch-wrap"><button class="swatch" data-bgc="${col}" style="background:${col}" aria-pressed="${c === col}" aria-label="${col}"></button>${mine ? `<button class="swatch-del" data-bgdel="${col}" aria-label="${col} 지우기">${X_ICON}</button>` : ""}</span>`;
+  return `<span class="hint">오른쪽 배경 색</span>
+    <button class="swatch photo" data-bgc="" aria-pressed="${!c}" title="사진에서" aria-label="사진에서"></button>
+    ${BG_COLORS.map((col) => sw(col, false)).join("")}
+    ${state.settings.bgCustom.map((col) => sw(col, true)).join("")}
+    <label class="swatch custom" title="색 추가" aria-label="색 추가"><span>${PLUS_ICON}</span><input type="color" id="bgPick" value="${c || "#3b82f6"}"></label>`;
+}
+function markSwatch() {
+  const box = $("#bgColors");
+  if (!box) return;
+  box.innerHTML = bgColorsHTML();
+  bindBgPick();
+}
+function bindBgPick() {
+  const pick = $("#bgPick");
+  if (!pick) return;
+  // 고르는 동안은 미리 보기, 다 고르면 내 색으로 추가
+  pick.oninput = (e) => { state.settings.bgColor = e.target.value; applyBgColor(); };
+  pick.onchange = (e) => {
+    const col = e.target.value.toLowerCase();
+    const s = state.settings;
+    if (!BG_COLORS.includes(col) && !s.bgCustom.includes(col)) s.bgCustom = [...s.bgCustom, col].slice(-8);
+    s.bgColor = col; applyBgColor(); save(); markSwatch();
+  };
 }
 /* ── 위치 맞추기: 왼쪽 사진을 끌어서 보이는 부분을 정해요(사진마다 저장) ── */
 let adjusting = false, drag = null;
