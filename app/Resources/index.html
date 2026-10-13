@@ -51,6 +51,14 @@
     background: linear-gradient(to left, rgba(0,0,0,.55) 0%, rgba(0,0,0,.25) 45%, rgba(0,0,0,0) 70%);
   }
   .dim { background: #000; opacity: var(--dim-amount, .15); }
+  .app.solid-bg .bg-blur { display: none; }
+  .bg-colors { display: flex; align-items: center; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .bg-colors .hint { margin-right: 6px; }
+  .swatch { width: 28px; height: 28px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); flex: none; position: relative; overflow: hidden; }
+  .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px #fff; }
+  .swatch.photo { background: linear-gradient(135deg, #8a6a5a, #3a3a52); }
+  .swatch.custom { background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red); }
+  .swatch.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: 0; padding: 0; }
 
   .art { position: relative; margin: 0; height: 100vh; overflow: hidden; }
   /* 사진과 오른쪽 화면을 깔끔하게 나눠요(흐리게 섞으면 밝은 사진에서 경계가 지저분해 보였어요) */
@@ -693,7 +701,7 @@ function defaults() {
     settings: {
       goalMin: 240, timerMin: 50,
       focusMin: 25, breakMin: 5, longBreakMin: 15, longEvery: 4,
-      sound: true, onTop: false, dim: 0.15,
+      sound: true, onTop: false, dim: 0.15, bgColor: "",
       overlay: true, alarmMode: "single", alarmPick: "b:morning", alarmSet: [], volume: 0.8, maxSec: 30,
       mode: "timer", subject: subjects[0].id,
     },
@@ -1032,7 +1040,15 @@ function applyWallpaper() {
   img.src = w.src;
   if (img.complete && img.naturalWidth) layoutArt(img.naturalWidth / img.naturalHeight);
   app.style.setProperty("--dim-amount", state.settings.dim);
+  applyBgColor();
   if ($("#miniImg")) { $("#miniImg").src = w.src; $("#miniImg").style.objectPosition = posOf(w); }
+}
+/* 오른쪽 배경 색: ""면 사진을 흐리게 깔고, 색을 고르면 그 색으로 */
+const BG_COLORS = ["#111114", "#2a2a30", "#1b2a44", "#3a1f2b", "#1f3a2e", "#4a3b2a", "#3b2f4f"];
+function applyBgColor() {
+  const c = state.settings.bgColor;
+  app.classList.toggle("solid-bg", !!c);
+  app.style.backgroundColor = c || "";
 }
 let artAspect = 0.6;
 /* 사진 비율과 상관없이 왼쪽 사진 영역은 늘 같은 폭이에요(배치가 흔들리지 않게). */
@@ -1347,6 +1363,12 @@ function renderWalls() {
       <span class="hint">배경 어둡게</span>
       <input type="range" min="0" max="0.7" step="0.05" value="${state.settings.dim}" id="dimRange" aria-label="배경 어둡게">
       <button class="soft" data-adjustpos style="margin-left:auto">위치 맞추기</button>
+    </div>
+    <div class="bg-colors">
+      <span class="hint">오른쪽 배경 색</span>
+      <button class="swatch photo" data-bgc="" aria-pressed="${!state.settings.bgColor}" title="사진에서" aria-label="사진에서"></button>
+      ${BG_COLORS.map((c) => `<button class="swatch" data-bgc="${c}" style="background:${c}" aria-pressed="${state.settings.bgColor === c}" aria-label="${c}"></button>`).join("")}
+      <label class="swatch custom" title="직접 고르기" aria-pressed="${!!state.settings.bgColor && !BG_COLORS.includes(state.settings.bgColor)}"><input type="color" id="bgPick" value="${state.settings.bgColor || "#222228"}" aria-label="직접 고르기"></label>
     </div>`;
   const fi = $("#wallFile");
   if (fi) fi.onchange = () => {
@@ -1356,6 +1378,7 @@ function renderWalls() {
       rd.readAsDataURL(file);
     });
   };
+  $("#bgPick").oninput = (e) => { state.settings.bgColor = e.target.value; applyBgColor(); markSwatch(); save(); };
   $("#dimRange").oninput = (e) => { state.settings.dim = Number(e.target.value); app.style.setProperty("--dim-amount", state.settings.dim); save(); };
 }
 function addWallpapers(items) {
@@ -1386,8 +1409,14 @@ $("#sheetBody").addEventListener("click", (e) => {
     writeNow(); applyWallpaper(); renderWalls();
   } else if (t.dataset.add !== undefined) post("pickWallpapers");
   else if (t.dataset.adjustpos !== undefined) startAdjust();
+  else if (t.dataset.bgc !== undefined) { state.settings.bgColor = t.dataset.bgc; applyBgColor(); markSwatch(); save(); }
 });
 
+function markSwatch() {
+  const c = state.settings.bgColor;
+  $$(".bg-colors [data-bgc]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.bgc === c)));
+  const cu = $(".swatch.custom"); if (cu) cu.setAttribute("aria-pressed", String(!!c && !BG_COLORS.includes(c)));
+}
 /* ── 위치 맞추기: 왼쪽 사진을 끌어서 보이는 부분을 정해요(사진마다 저장) ── */
 let adjusting = false, drag = null;
 function startAdjust() {
