@@ -69,8 +69,10 @@ final class SoundPlayer {
         let type = spec["type"] as? String ?? "system"
         if type == "none" { return }
 
-        if type == "file", let file = spec["file"] as? String, isSafeName(file),
-           let p = try? AVAudioPlayer(contentsOf: soundDir.appendingPathComponent(file)) {
+        var url: URL?
+        if type == "file", let file = spec["file"] as? String, isSafeName(file) { url = soundDir.appendingPathComponent(file) }
+        if type == "bundle", let name = spec["name"] as? String { url = Bundle.main.url(forResource: name, withExtension: nil) }
+        if let u = url, let p = try? AVAudioPlayer(contentsOf: u) {
             p.numberOfLoops = loop ? -1 : 0
             let start = spec["start"] as? Double ?? 0
             if start > 0, start < p.duration - 1 { p.currentTime = start }
@@ -102,15 +104,21 @@ final class SoundPlayer {
         system?.volume = v
     }
 
-    func fadeOutAndStop() {
+    private var fading = false
+    /// 소리가 나는 중인지 (꺼지는 중이면 아니라고 봐요)
+    var isPlaying: Bool { !fading && ((player?.isPlaying ?? false) || (system?.isPlaying ?? false)) }
+
+    func fadeOutAndStop(_ duration: Double = 1.2) {
         guard let p = player else { stop(); return }
-        p.setVolume(0, fadeDuration: 1.2)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) { [weak self] in
+        fading = true
+        p.setVolume(0, fadeDuration: duration)
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.1) { [weak self] in
             if self?.player === p { self?.stop() }
         }
     }
 
     func stop() {
+        fading = false
         stopTimer?.invalidate()
         stopTimer = nil
         player?.stop()
@@ -153,6 +161,7 @@ final class EditorPlayer {
     func pause() { player?.pause(); emit() }
 
     func setVolume(_ v: Float) { player?.volume = v }
+    var isPlaying: Bool { player?.isPlaying ?? false }
 
     func seek(_ t: Double) {
         guard let p = player else { return }
@@ -196,7 +205,8 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
     private var player: WKWebView?
     private var pauseTimer: Timer?
     private(set) var isPreview = false
-    private var ytStarted = false
+    private var currentVolume: Double = 0.8
+    var isShowing: Bool { panel != nil }
     var onAction: ((String) -> Void)?
     var onYouTubeFailed: (() -> Void)?
     var onYouTubePlaying: (() -> Void)?
@@ -247,14 +257,7 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
             let web = makePlayer(yt, frame: NSRect(x: 22, y: (H - vh) / 2, width: vw, height: vh))
             glass.addSubview(web)
             player = web
-            ytStarted = false
-            // 자동 재생이 막혀 있으면 플레이어 가운데를 한 번 눌러 줘요(이미 재생 중이면 안 눌러요).
-            for delay in [1.8, 3.6] {
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak web] in
-                    guard let self = self, let web = web, self.player === web, !self.ytStarted else { return }
-                    self.clickCenter(of: web)
-                }
-            }
+            currentVolume = Double(yt.volume) / 100.0
             leftEdge = 22 + vw + 24
             if yt.maxSec > 0 {
                 let t = Timer(timeInterval: yt.maxSec, repeats: false) { [weak self] _ in
@@ -345,33 +348,48 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
         config.mediaTypesRequiringUserActionForPlayback = []
         config.userContentController.add(self, name: "yt")
         // 재생 위치·볼륨·반복만 다루는 작은 스크립트 (YouTube 페이지 안에서 실행)
+        // 유튜브 플레이어 자체 명령(playVideo·setVolume 등)으로 다뤄요.
+        // 화면을 대신 눌러 주는 방식은 이미 재생 중일 때 멈춰 버릴 수 있어서 쓰지 않아요.
         let control = """
         (function(){
           if (window.__ct) return; window.__ct = true;
-          var START=\(yt.start), VOL=\(Double(yt.volume) / 100.0), sent=false, tries=0;
+          var START=\(yt.start), VOL=\(Double(yt.volume) / 100.0), sent=false, tries=0, kicks=0, clicked=false;
           function send(m){ try{ webkit.messageHandlers.yt.postMessage(m); }catch(e){} }
-          function v(){ return document.querySelector('video'); }
-          window.__ctTime = function(){ var x=v(); return x ? x.currentTime : -1; };
-          window.__ctPause = function(){ var x=v(); if (x) x.pause(); };
-          function hook(x){
-            if (x.__ct) return; x.__ct = true;
-            x.volume = VOL;
-            x.addEventListener('playing', function(){ if(!sent){ sent=true; send({playing:true}); } });
-            x.addEventListener('ended', function(){ x.currentTime = START; x.play(); });
-            function go(){
-              if (START > 0 && x.currentTime < START - 1) x.currentTime = START;
-              var p = x.play();
-              if (p && p.catch) p.catch(function(){ x.muted = true; x.play().then(function(){ setTimeout(function(){ x.muted = false; }, 150); }); });
+          function mp(){ var p=document.getElementById('movie_player'); return (p && typeof p.playVideo==='function') ? p : null; }
+          function vid(){ return document.querySelector('video'); }
+          function applyVol(){
+            var p=mp(), x=vid(), silent = VOL <= 0.001;
+            try { if (p) { if (silent) p.mute(); else { p.unMute(); p.setVolume(Math.round(VOL*100)); } } } catch(e){}
+            if (x) { x.volume = Math.max(0, Math.min(1, VOL)); x.muted = silent; }
+          }
+          function isPlaying(){
+            var p=mp(); try { if (p && p.getPlayerState) return p.getPlayerState() === 1; } catch(e){}
+            var x=vid(); return !!(x && !x.paused && x.readyState > 2);
+          }
+          window.__ctVol = function(v){ VOL = v; applyVol(); };
+          window.__ctTime = function(){ var p=mp(); try { if (p) return p.getCurrentTime(); } catch(e){} var x=vid(); return x ? x.currentTime : -1; };
+          window.__ctPause = function(){ var p=mp(); try { if (p) { p.pauseVideo(); return; } } catch(e){} var x=vid(); if (x) x.pause(); };
+          function kick(){
+            var p=mp(); if (!p) return;
+            kicks++;
+            try { applyVol(); if (START > 0 && p.getCurrentTime() < START - 1) p.seekTo(START, true); p.playVideo(); } catch(e){}
+            if (kicks >= 5 && !clicked) {
+              var b = document.querySelector('.ytp-large-play-button');
+              if (b && b.offsetParent) { clicked = true; b.click(); }
             }
-            if (x.readyState >= 1) go(); else x.addEventListener('loadedmetadata', go, { once: true });
           }
           var timer = setInterval(function(){
             tries++;
-            var x = v();
             if (document.querySelector('.ytp-error')) { clearInterval(timer); send({error:'blocked'}); return; }
-            if (x) hook(x);
-            if (sent || tries > 75) { clearInterval(timer); if (!sent) send({error:'timeout'}); }
+            if (isPlaying()) { applyVol(); if (!sent) { sent = true; send({playing:true}); } clearInterval(timer); return; }
+            if (tries % 4 === 1) kick();
+            if (tries > 100) { clearInterval(timer); send({error:'timeout'}); }
           }, 150);
+          // 끝나면 정해 둔 지점부터 다시
+          setInterval(function(){
+            var p=mp(); if (!sent || !p) return;
+            try { if (p.getPlayerState() === 0) { p.seekTo(START, true); p.playVideo(); } } catch(e){}
+          }, 500);
         })();
         """
         config.userContentController.addUserScript(WKUserScript(source: control, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
@@ -395,27 +413,18 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
     }
 
     /// 알림 창 안 유튜브 소리 크기 바꾸기
+    /// 재생 중이든 아직 불러오는 중이든 마지막으로 정한 크기를 기억했다가 적용해요.
     func setVolume(_ v: Double) {
-        player?.evaluateJavaScript("(function(){var x=document.querySelector('video'); if(x) x.volume=\(max(0, min(1, v)));})()")
-    }
-
-    private func clickCenter(of web: WKWebView) {
-        guard let win = web.window else { return }
-        let pt = web.convert(NSPoint(x: web.bounds.midX, y: web.bounds.midY), to: nil)
-        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-            if let ev = NSEvent.mouseEvent(with: type, location: pt, modifierFlags: [],
-                                           timestamp: ProcessInfo.processInfo.systemUptime,
-                                           windowNumber: win.windowNumber, context: nil,
-                                           eventNumber: 0, clickCount: 1,
-                                           pressure: type == .leftMouseDown ? 1 : 0) {
-                win.sendEvent(ev)
-            }
-        }
+        currentVolume = max(0, min(1, v))
+        player?.evaluateJavaScript("window.__ctVol && window.__ctVol(\(currentVolume))")
     }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let m = message.body as? [String: Any] else { return }
-        if m["playing"] != nil { ytStarted = true; onYouTubePlaying?() }
+        if m["playing"] != nil {
+            setVolume(currentVolume)
+            onYouTubePlaying?()
+        }
         if m["error"] != nil { onYouTubeFailed?() }
     }
 
@@ -456,6 +465,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
     private var activity: NSObjectProtocol?
     private let io = DispatchQueue(label: "charactertimer.save")
     let sound = SoundPlayer()
+    let volSound = SoundPlayer()      // 소리 크기 맞출 때만 쓰는 음악 (다른 소리와 따로)
     let overlay = FinishOverlay()
     let editor = EditorPlayer()
     private var previewAlarmId = ""
@@ -507,6 +517,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         case "deleteSound":
             if let n = body["name"] as? String, isSafeName(n) { try? FileManager.default.removeItem(at: soundDir.appendingPathComponent(n)) }
         case "previewSound":
+            volSound.stop()
             let spec = body["sound"] as? [String: Any] ?? [:]
             let vol = body["volume"] as? Double ?? 0.8
             if let yt = youTube(spec, volume: vol, maxSec: 0) {
@@ -526,9 +537,22 @@ final class Bridge: NSObject, WKScriptMessageHandler {
                 let loop = body["loop"] as? Bool ?? false
                 sound.play(spec, loop: loop, volume: Float(vol), maxSec: loop ? 0 : 15, fadeIn: false)
             }
+        case "volPreview":
+            // 소리 크기 맞추기용 음악. 다른 소리가 이미 나는 중이면 그 크기만 바꿔요.
+            let v = Float(body["volume"] as? Double ?? 0.8)
+            if overlay.isShowing || sound.isPlaying || editor.isPlaying {
+                fallbackVolume = v
+                sound.setVolume(v); editor.setVolume(v); overlay.setVolume(Double(v))
+                return
+            }
+            if volSound.isPlaying { volSound.setVolume(v) }
+            else { volSound.play(["type": "bundle", "name": "volume-preview.caf"], loop: true, volume: v, maxSec: 0, fadeIn: false) }
+        case "volPreviewStop":
+            volSound.fadeOutAndStop(0.5)
         case "setVolume":
             let v = body["volume"] as? Double ?? 0.8
             fallbackVolume = Float(v)
+            volSound.setVolume(Float(v))
             sound.setVolume(Float(v))
             editor.setVolume(Float(v))
             overlay.setVolume(v)
@@ -539,6 +563,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             if editor.load(body["file"] as? String ?? "") { editor.seek(body["t"] as? Double ?? 0) }
         case "editPlay":
             sound.stop()
+            volSound.stop()
             if editor.load(body["file"] as? String ?? "") {
                 editor.play(from: body["t"] as? Double, volume: Float(body["volume"] as? Double ?? 0.8))
             }
@@ -607,6 +632,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         var spec = b["sound"] as? [String: Any] ?? [:]
         fallbackVolume = Float(vol)
         fallbackMaxSec = maxSec
+        volSound.stop()
 
         // 유튜브는 플레이어가 화면에 보여야 해서, 알림 창을 끈 경우엔 기본 소리로 울려요.
         let yt = showOverlay ? youTube(spec, volume: vol, maxSec: maxSec) : nil

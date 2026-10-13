@@ -1361,7 +1361,7 @@ function renderSettings() {
         <div class="group" style="margin-top:18px"><h3>끝났을 때 알림</h3>
           <div class="set-row"><span>화면 맨 위에 알림 창 띄우기</span><button class="switch" role="switch" data-toggle="overlay" aria-checked="${state.settings.overlay}" aria-label="화면 맨 위에 알림 창 띄우기"></button></div>
           <div class="set-row"><span>울릴 알람<small class="hint" style="display:block;margin-top:2px">${esc(alarmSummary())}</small></span><button class="soft" data-openalarms>알람 관리</button></div>
-          <div class="set-row range-row"><span>소리 크기</span><input type="range" min="0.1" max="1" step="0.05" value="${state.settings.volume}" data-volume aria-label="소리 크기"></div>
+          <div class="set-row range-row"><span>소리 크기</span><input type="range" min="0" max="1" step="0.05" value="${state.settings.volume}" data-volume aria-label="소리 크기"></div>
           <div class="set-row"><span>노래 재생 시간</span>
             <select class="field" data-maxsec aria-label="노래 재생 시간">
               ${[[30, "30초"], [60, "1분"], [180, "3분"], [0, "확인 누를 때까지"]].map(([v, l]) => `<option value="${v}" ${state.settings.maxSec === v ? "selected" : ""}>${l}</option>`).join("")}
@@ -1468,7 +1468,7 @@ function renderAlarms() {
       <span class="hint num" id="pickCount"></span>
       <label class="vol" title="소리 크기">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
-        <input type="range" id="alarmVol" min="0.1" max="1" step="0.05" value="${state.settings.volume}" aria-label="소리 크기">
+        <input type="range" id="alarmVol" min="0" max="1" step="0.05" value="${state.settings.volume}" aria-label="소리 크기">
       </label>
       ${state.alarms.length > 5 ? `<input class="field search" id="alarmSearch" type="search" placeholder="검색" value="${esc(alarmQuery)}" aria-label="알람 검색">` : ""}
     </div>
@@ -1571,6 +1571,7 @@ window.__startPicked = ({ id, sec }) => {
 
 /* ▶ 듣기: 유튜브는 맨 위 미리 듣기 창(여기서 시작 버튼 포함), 파일은 아래 재생 막대 */
 function listen(id) {
+  if (volPreview) { clearTimeout(volTimer); volPreview = false; save(); }   // 맞추기용 음악은 Mac 쪽에서 바로 꺼져요
   if (id === "sys") {
     closeNowbar();
     if (previewing === "sys") { stopPreview(); renderAlarmList(); return; }
@@ -1878,7 +1879,8 @@ function currentAlarmSpec() {
   }
   return [specForPick(s.alarmPick === "none" ? "sys:Glass" : s.alarmPick), ""];
 }
-/* 소리 크기: 기본 알림음으로 들려줘요. 노래를 듣는 중이면 그 노래 크기만 바꿔요(멈추지 않게). */
+/* 소리 크기: 다른 소리가 안 나면 잔잔한 음악을 틀어 두고 맞춰요.
+   노래를 듣는 중이거나 알림이 울리는 중이면 그 소리 크기만 바꿔요(멈추거나 닫지 않아요). */
 function onVolumeInput(v, released) {
   state.settings.volume = v;
   $$("[data-volume], #alarmVol").forEach((el) => { if (Number(el.value) !== v) el.value = v; });
@@ -1888,19 +1890,17 @@ function onVolumeInput(v, released) {
     if (released) save();
     return;
   }
-  if (!volPreview) {
-    volPreview = true;
-    if (NATIVE) post("previewSound", { sound: { type: "system", name: "Glass" }, volume: v, loop: true });
-    else chime();
-  } else post("setVolume", { volume: v });
+  if (NATIVE) post("volPreview", { volume: v });
+  else if (!volPreview) chime();
+  volPreview = true;
   clearTimeout(volTimer);
-  volTimer = setTimeout(endVolumePreview, released ? 900 : 1500);
+  volTimer = setTimeout(endVolumePreview, released ? 1800 : 2500);
 }
 function endVolumePreview() {
   clearTimeout(volTimer);
   if (!volPreview) return;
   volPreview = false;
-  post("stopSound");
+  post("volPreviewStop");
   save();
 }
 document.addEventListener("input", (e) => {
