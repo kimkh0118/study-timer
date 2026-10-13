@@ -512,6 +512,8 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         case "dismiss":
             overlay.close()
             sound.stop()
+        case "compact":
+            setCompact(body["on"] as? Bool ?? false)
         case "badge":
             let text = body["text"] as? String ?? ""
             NSApp.dockTile.badgeLabel = text.isEmpty ? nil : text
@@ -525,6 +527,31 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             exportCSV(body["csv"] as? String ?? "", name: body["name"] as? String ?? "공부기록.csv")
         default:
             break
+        }
+    }
+
+    /// 간소화: 화면 오른쪽 위 작은 창으로 줄이고, 다시 누르면 원래 크기·위치로.
+    private(set) var normalFrame: NSRect?
+    func setCompact(_ on: Bool) {
+        guard let w = window else { return }
+        let buttons: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+        if on {
+            guard normalFrame == nil else { return }
+            normalFrame = w.frame
+            w.contentMinSize = NSSize(width: 360, height: 160)
+            w.styleMask.remove(.resizable)
+            buttons.forEach { w.standardWindowButton($0)?.isHidden = true }
+            let size = NSSize(width: 420, height: 180)
+            let vf = (w.screen ?? NSScreen.main)?.visibleFrame ?? w.frame
+            w.setFrame(NSRect(x: vf.maxX - size.width - 20, y: vf.maxY - size.height - 20,
+                              width: size.width, height: size.height), display: true, animate: true)
+        } else {
+            guard let nf = normalFrame else { return }
+            normalFrame = nil
+            w.styleMask.insert(.resizable)
+            buttons.forEach { w.standardWindowButton($0)?.isHidden = false }
+            w.setFrame(nf, display: true, animate: true)
+            w.contentMinSize = NSSize(width: 1000, height: 680)
         }
     }
 
@@ -800,6 +827,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         NSApp.dockTile.badgeLabel = nil
+        if let nf = bridge.normalFrame { window.setFrame(nf, display: false) }   // 다음에 켤 땐 원래 크기로
         bridge.editor.stop()
         bridge.sound.stop()
         bridge.overlay.close()

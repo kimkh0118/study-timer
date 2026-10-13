@@ -17,7 +17,7 @@
     --tag: #f1c232;
     --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Pretendard", "Malgun Gothic", sans-serif;
     --round: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
-    --art-w: 42%;
+    --art-w: clamp(320px, 38vw, 560px);
   }
 
   * { box-sizing: border-box; }
@@ -410,6 +410,33 @@
   .nowbar[hidden] { display: none; }
   .now-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+  /* ───────── 간소화 ───────── */
+  .mini { display: none; }
+  .app.compact > :not(.mini):not(.toast):not(.alert):not(.bg-blur):not(.dim) { display: none !important; }
+  .app.compact { grid-template-columns: 1fr; }
+  .app.compact .mini {
+    display: grid; grid-template-columns: auto 1fr; height: 100vh; width: 100vw; position: relative; z-index: 1;
+    animation: miniIn .45s cubic-bezier(.16,.84,.24,1);
+  }
+  @keyframes miniIn { from { opacity: 0; transform: scale(1.03); filter: blur(6px); } }
+  .mini-art { height: 100vh; aspect-ratio: 1 / 1; overflow: hidden; }
+  .mini-art img { width: 100%; height: 100%; object-fit: cover; display: block;
+    -webkit-mask-image: linear-gradient(to right, #000 70%, transparent); mask-image: linear-gradient(to right, #000 70%, transparent); }
+  .mini-body { min-width: 0; display: flex; flex-direction: column; justify-content: center; padding: 14px 16px 14px 4px; }
+  .mini-sub { font-size: 12px; font-weight: 600; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mini-time { font-family: var(--round); font-size: 44px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; margin-top: 2px; }
+  .mini-bar { height: 4px; border-radius: 2px; background: rgba(255,255,255,.14); margin: 8px 0 12px; overflow: hidden; }
+  .mini-bar i { display: block; height: 100%; width: 0; background: var(--pin); border-radius: 2px; transition: width .3s linear; }
+  .mini-bar.break i { background: rgba(255,255,255,.85); }
+  .mini-bar.goal i { background: var(--tag); }
+  .mini-actions { display: flex; align-items: center; gap: 8px; }
+  .mini-spacer { flex: 1; }
+  .mini-go { width: 40px; height: 40px; border-radius: 50%; background: #fff; color: #000; display: grid; place-items: center; transition: transform .12s; }
+  .mini-go:active { transform: scale(.94); }
+  .mini-go svg { width: 14px; height: 14px; }
+  .mini .tool { width: 34px; height: 34px; }
+  .mini .tool svg { width: 16px; height: 16px; }
+
   /* 브라우저에서 열었을 때 쓰는 알림 창 (앱에서는 Mac 알림 창이 대신 떠요) */
   .alert {
     position: fixed; top: 16px; left: 50%; z-index: 30; transform: translateX(-50%);
@@ -502,6 +529,9 @@
         <button class="tool glass" id="pinTop" title="항상 위에 띄우기" aria-label="항상 위에 띄우기" aria-pressed="false">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l-1 6 3 3H7l3-3-1-6zM12 12v9"/></svg>
         </button>
+        <button class="tool glass" id="toCompact" title="간소화" aria-label="간소화">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>
+        </button>
         <button class="tool glass" id="openSettings" title="설정" aria-label="설정">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.2"/><circle cx="8" cy="17" r="2.2"/></svg>
         </button>
@@ -555,6 +585,25 @@
       </div>
     </section>
   </main>
+
+  <section class="mini" id="mini" aria-label="간소화 타이머">
+    <div class="mini-art"><img id="miniImg" alt=""></div>
+    <div class="mini-body">
+      <div class="mini-sub" id="miniSub"></div>
+      <div class="mini-time num" id="miniTime">00:00</div>
+      <div class="mini-bar"><i id="miniProg"></i></div>
+      <div class="mini-actions">
+        <button class="mini-go" id="miniGo" aria-label="시작"></button>
+        <span class="mini-spacer"></span>
+        <button class="tool glass" id="miniPin" title="항상 위에 띄우기" aria-label="항상 위에 띄우기" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l-1 6 3 3H7l3-3-1-6zM12 12v9"/></svg>
+        </button>
+        <button class="tool glass" id="toFull" title="원래대로" aria-label="원래대로">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
 
   <div class="sheet-wrap" id="sheetWrap" hidden>
     <div class="sheet glass" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
@@ -925,20 +974,14 @@ function applyWallpaper() {
   img.src = w.src;
   if (img.complete && img.naturalWidth) layoutArt(img.naturalWidth / img.naturalHeight);
   app.style.setProperty("--dim-amount", state.settings.dim);
+  if ($("#miniImg")) { $("#miniImg").src = w.src; $("#miniImg").style.objectPosition = w.focus || "50% 30%"; }
 }
 let artAspect = 0.6;
+/* 사진 비율과 상관없이 왼쪽 사진 영역은 늘 같은 폭이에요(배치가 흔들리지 않게). */
 function layoutArt(aspect) {
   if (aspect) artAspect = aspect;
-  if (artAspect >= 1.15) {
-    app.dataset.layout = "wide";
-    app.style.setProperty("--art-w", "40%");
-  } else {
-    app.dataset.layout = "tall";
-    const w = Math.max(300, Math.min(innerHeight * artAspect * 1.04, innerWidth * 0.46));
-    app.style.setProperty("--art-w", `${Math.round(w)}px`);
-  }
+  app.dataset.layout = "tall";
 }
-addEventListener("resize", () => layoutArt());
 
 /* ════════════════ 화면: 시계 ════════════════ */
 function renderClock() {
@@ -1014,6 +1057,7 @@ function renderLive() {
   $("#ringLabel").innerHTML = label;
   $("#ring").dataset.phase = phase;
   $("#ringBar").style.strokeDashoffset = app.classList.contains("boot") ? CIRC : CIRC * (1 - frac);
+  renderMini(big, frac, phase);
 
   document.title = run ? `${big} 캐릭터 타이머` : "캐릭터 타이머";
   let badge = "";
@@ -1802,6 +1846,7 @@ function exportCSV() {
 /* ════════════════ 항상 위 ════════════════ */
 function applyOnTop() {
   $("#pinTop").setAttribute("aria-pressed", String(state.settings.onTop));
+  $("#miniPin").setAttribute("aria-pressed", String(state.settings.onTop));
   post("onTop", { value: state.settings.onTop });
 }
 $("#pinTop").onclick = () => {
@@ -1809,6 +1854,44 @@ $("#pinTop").onclick = () => {
   applyOnTop(); save();
   toast(state.settings.onTop ? "항상 위에" : "항상 위에 끔");
 };
+
+/* ════════════════ 간소화 ════════════════ */
+let compact = false;
+function setCompact(on) {
+  if (on === compact) return;
+  compact = on;
+  if (on) {
+    closeSheet();
+    $("#miniImg").src = currentWall().src;
+    $("#miniImg").style.objectPosition = currentWall().focus || "50% 30%";
+    app.classList.add("compact");
+    post("compact", { on: true });
+  } else {
+    post("compact", { on: false });
+    // 창이 다 커진 뒤에 전체 화면으로 바꿔요(작은 창에 큰 화면이 끼어 보이지 않게).
+    setTimeout(() => { app.classList.remove("compact"); lastStatsSec = 0; renderLive(); }, NATIVE ? 320 : 0);
+  }
+  renderLive();
+}
+$("#toCompact").onclick = () => setCompact(true);
+$("#toFull").onclick = () => setCompact(false);
+$("#miniGo").onclick = () => $("#go").click();
+$("#miniPin").onclick = () => $("#pinTop").click();
+
+function renderMini(big, frac, phase) {
+  if (!compact) return;
+  $("#miniTime").textContent = big;
+  const subj = subjectOf(run ? run.subject : state.settings.subject).name;
+  $("#miniSub").textContent = run && run.phase === "break" ? (run.kind === "long" ? "긴 휴식" : "휴식") : subj;
+  const bar = $("#miniProg").parentElement;
+  bar.classList.toggle("break", phase === "break");
+  bar.classList.toggle("goal", phase === "goal");
+  $("#miniProg").style.width = `${Math.round((phase === "goal" ? frac : run ? 1 - frac : 0) * 1000) / 10}%`;
+  const running = !!(run && run.startedAt);
+  $("#miniGo").innerHTML = running ? PAUSE_ICON : PLAY_ICON;
+  $("#miniGo").setAttribute("aria-label", running ? "일시정지" : run ? "계속" : "시작");
+  $("#miniPin").setAttribute("aria-pressed", String(state.settings.onTop));
+}
 
 /* ════════════════ 토스트 ════════════════ */
 let toastTimer;
