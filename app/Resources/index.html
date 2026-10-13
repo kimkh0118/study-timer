@@ -39,10 +39,15 @@
 
   /* ───────── 배경 ───────── */
   .app { position: relative; height: 100vh; display: grid; grid-template-columns: var(--art-w) 1fr; }
-  .bg-blur, .bg-full, .dim { position: absolute; inset: 0; pointer-events: none; }
+  .bg-blur, .bg-full, .bg-solid, .dim { position: absolute; inset: 0; pointer-events: none; }
+  /* 배경 투명도: 오른쪽 배경 층들을 함께 투명하게 → Mac 앱에선 뒤의 바탕화면이 흐리게 비쳐요 */
+  .bg-full, .bg-solid { opacity: var(--bg-alpha, 1); }
+  .bg-solid { display: none; }
+  .app.solid-bg .bg-solid { display: block; }
+  html.native, html.native body { background: transparent; }
   .bg-blur {
     inset: -80px; background-size: cover; background-position: center;
-    filter: blur(70px) saturate(1.4) brightness(.5); transform: scale(1.08);
+    filter: blur(70px) saturate(1.4) brightness(.5); transform: scale(1.08); opacity: var(--bg-alpha, 1);
   }
   .bg-full { background-size: cover; background-position: center; display: none; }
   .app[data-layout="wide"] .bg-full { display: block; }
@@ -50,7 +55,7 @@
     content: ""; position: absolute; inset: 0;
     background: linear-gradient(to left, rgba(0,0,0,.55) 0%, rgba(0,0,0,.25) 45%, rgba(0,0,0,0) 70%);
   }
-  .dim { background: #000; opacity: var(--dim-amount, .15); }
+  .dim { background: #000; opacity: calc(var(--dim-amount, .15) * var(--bg-alpha, 1)); }
   .app.solid-bg .bg-blur { display: none; }
   .bg-colors { display: flex; align-items: center; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
   .bg-colors .hint { margin-right: 6px; }
@@ -453,7 +458,7 @@
   .mini { display: none; }
   /* 간소화 창에서는 크게 흐린 배경을 끄고 가벼운 배경을 써요(창을 옮길 때 검게 변하던 문제) */
   .app.compact > :not(.mini):not(.toast):not(.alert) { display: none !important; }
-  .app.compact { background: linear-gradient(120deg, #23232a, #0e0e12); }
+  .app.compact { background: linear-gradient(120deg, rgba(35,35,42,var(--bg-alpha, 1)), rgba(14,14,18,var(--bg-alpha, 1))); }
   .app.compact { grid-template-columns: 1fr; }
   .app.compact .mini {
     display: grid; grid-template-columns: auto 1fr; height: 100vh; width: 100vw; position: relative; z-index: 1;
@@ -556,6 +561,7 @@
 <div class="app boot booting" id="app" data-layout="tall">
   <div class="bg-blur" id="bgBlur"></div>
   <div class="bg-full" id="bgFull"></div>
+  <div class="bg-solid" id="bgSolid"></div>
   <div class="dim" id="dim"></div>
 
   <figure class="art"><img id="artImg" alt="" draggable="false">
@@ -686,6 +692,7 @@
 <script>
 /* ════════════════ 기본 ════════════════ */
 const NATIVE = !!window.__NATIVE__;
+if (NATIVE) document.documentElement.classList.add("native");   // 창 뒤 유리가 비쳐 보이게
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const pad = (n) => String(n).padStart(2, "0");
@@ -716,7 +723,7 @@ function defaults() {
     settings: {
       goalMin: 240, timerMin: 50,
       focusMin: 25, breakMin: 5, longBreakMin: 15, longEvery: 4,
-      sound: true, onTop: false, dim: 0.15, bgColor: "", bgCustom: [],
+      sound: true, onTop: false, dim: 0.15, bgColor: "", bgCustom: [], bgClear: 0,
       overlay: true, alarmMode: "single", alarmPick: "b:morning", alarmSet: [], volume: 0.8, maxSec: 30,
       mode: "timer", subject: subjects[0].id,
     },
@@ -759,6 +766,7 @@ function migrate(raw) {
   if (!s.wallpapers.some((w) => w.id === s.wallpaper)) s.wallpaper = "b1";
   if (!s.wallPos || typeof s.wallPos !== "object") s.wallPos = {};
   if (!Array.isArray(s.settings.bgCustom)) s.settings.bgCustom = [];
+  s.settings.bgClear = Math.min(0.9, Math.max(0, Number(s.settings.bgClear) || 0));
   return s;
 }
 
@@ -1065,7 +1073,8 @@ const BG_COLORS = ["#000000", "#1f2937", "#1e3a8a", "#2563eb", "#0e7490", "#1580
 function applyBgColor() {
   const c = state.settings.bgColor;
   app.classList.toggle("solid-bg", !!c);
-  app.style.backgroundColor = c || "";
+  $("#bgSolid").style.backgroundColor = c || "";
+  app.style.setProperty("--bg-alpha", 1 - (state.settings.bgClear || 0));
 }
 let artAspect = 0.6;
 /* 사진 비율과 상관없이 왼쪽 사진 영역은 늘 같은 폭이에요(배치가 흔들리지 않게). */
@@ -1383,6 +1392,11 @@ function renderWalls() {
       <input type="range" min="30" max="100" step="5" value="${Math.round((1 - state.settings.dim) * 100)}" id="dimRange" aria-label="배경 밝기">
       <button class="soft" data-adjustpos style="margin-left:auto">위치 맞추기</button>
     </div>
+    <div class="slider-row">
+      <span class="hint">배경 투명도</span>
+      <input type="range" min="0" max="90" step="5" value="${Math.round((state.settings.bgClear || 0) * 100)}" id="clearRange" aria-label="배경 투명도">
+      <span class="hint num" id="clearVal" style="min-width:36px;text-align:right">${Math.round((state.settings.bgClear || 0) * 100)}%</span>
+    </div>
     <div class="bg-colors" id="bgColors">${bgColorsHTML()}</div>`;
   const fi = $("#wallFile");
   if (fi) fi.onchange = () => {
@@ -1393,6 +1407,11 @@ function renderWalls() {
     });
   };
   bindBgPick();
+  $("#clearRange").oninput = (e) => {
+    state.settings.bgClear = Number(e.target.value) / 100;
+    $("#clearVal").textContent = `${e.target.value}%`;
+    applyBgColor(); save();
+  };
   $("#dimRange").oninput = (e) => { state.settings.dim = Math.round((1 - Number(e.target.value) / 100) * 100) / 100; app.style.setProperty("--dim-amount", state.settings.dim); save(); };
 }
 function addWallpapers(items) {

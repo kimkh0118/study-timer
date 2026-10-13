@@ -737,11 +737,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         window.isReleasedWhenClosed = false
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.backgroundColor = NSColor(red: 0.08, green: 0.08, blue: 0.1, alpha: 1)
+        // 배경 투명도를 위해 창은 투명하게, 뒤에는 흐린 유리(바탕화면이 비쳐 보임)
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.delegate = self
         window.contentMinSize = NSSize(width: 1000, height: 680)
 
-        let root = NSView(frame: window.contentRect(forFrameRect: window.frame))
+        let root = NSVisualEffectView(frame: window.contentRect(forFrameRect: window.frame))
+        root.material = .hudWindow
+        root.blendingMode = .behindWindow
+        root.state = .active
+        root.appearance = NSAppearance(named: .vibrantDark)
         web.frame = root.bounds
         root.addSubview(web)
         let strip = DragStrip(frame: NSRect(x: 0, y: root.bounds.height - 30, width: root.bounds.width, height: 30))
