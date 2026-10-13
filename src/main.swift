@@ -373,16 +373,22 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
             var p=mp(); if (!p) return;
             kicks++;
             try { applyVol(); if (START > 0 && p.getCurrentTime() < START - 1) p.seekTo(START, true); p.playVideo(); } catch(e){}
-            if (kicks >= 5 && !clicked) {
-              var b = document.querySelector('.ytp-large-play-button');
-              if (b && b.offsetParent) { clicked = true; b.click(); }
-            }
+          }
+          // 그래도 큰 재생 버튼이 떠 있으면 Mac 쪽에 그 자리를 실제로 눌러 달라고 해요(버튼이 보일 때만).
+          function askClick(){
+            var b = document.querySelector('.ytp-large-play-button');
+            if (!b || !b.offsetParent) return false;
+            var r = b.getBoundingClientRect();
+            if (r.width < 4) return false;
+            send({click:[r.left + r.width/2, r.top + r.height/2]});
+            return true;
           }
           var timer = setInterval(function(){
             tries++;
             if (document.querySelector('.ytp-error')) { clearInterval(timer); send({error:'blocked'}); return; }
             if (isPlaying()) { applyVol(); if (!sent) { sent = true; send({playing:true}); } clearInterval(timer); return; }
             if (tries % 4 === 1) kick();
+            if ((tries === 8 || tries === 24 || tries === 44) && askClick()) clicked = true;
             if (tries > 100) { clearInterval(timer); send({error:'timeout'}); }
           }, 150);
           // 끝나면 정해 둔 지점부터 다시
@@ -395,6 +401,8 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
         config.userContentController.addUserScript(WKUserScript(source: control, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
 
         let web = WKWebView(frame: frame, configuration: config)
+        // 앱 속 웹 화면 기본 정보로는 유튜브가 자동 재생을 꺼 버려서, 일반 Safari라고 알려 줘요.
+        web.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15"
         web.wantsLayer = true
         web.layer?.cornerRadius = 14
         web.layer?.masksToBounds = true
@@ -419,12 +427,28 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
         player?.evaluateJavaScript("window.__ctVol && window.__ctVol(\(currentVolume))")
     }
 
+    /// 플레이어 안의 한 점(웹 페이지 좌표)을 실제 마우스처럼 눌러요. 유튜브가 자동 재생을 막을 때만 써요.
+    private func realClick(_ web: WKWebView, x: Double, y: Double) {
+        guard let win = web.window else { return }
+        let local = NSPoint(x: x, y: web.isFlipped ? y : Double(web.bounds.height) - y)
+        let pt = web.convert(local, to: nil)
+        let now = ProcessInfo.processInfo.systemUptime
+        guard let down = NSEvent.mouseEvent(with: .leftMouseDown, location: pt, modifierFlags: [], timestamp: now,
+                                            windowNumber: win.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1),
+              let up = NSEvent.mouseEvent(with: .leftMouseUp, location: pt, modifierFlags: [], timestamp: now + 0.05,
+                                          windowNumber: win.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 0)
+        else { return }
+        web.mouseDown(with: down)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { web.mouseUp(with: up) }
+    }
+
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let m = message.body as? [String: Any] else { return }
         if m["playing"] != nil {
             setVolume(currentVolume)
             onYouTubePlaying?()
         }
+        if let c = m["click"] as? [Double], c.count == 2, let web = player { realClick(web, x: c[0], y: c[1]) }
         if m["error"] != nil { onYouTubeFailed?() }
     }
 
