@@ -114,6 +114,59 @@ final class SoundPlayer {
     }
 }
 
+// ───────── 시작 지점 고를 때 쓰는 재생기 (들으면서 위치 옮기기) ─────────
+final class EditorPlayer {
+    private var player: AVAudioPlayer?
+    private var file: String?
+    private var ticker: Timer?
+    var onPosition: ((Double, Bool, Double) -> Void)?
+
+    @discardableResult
+    func load(_ name: String) -> Bool {
+        if file == name, player != nil { return true }
+        stop()
+        guard isSafeName(name), let p = try? AVAudioPlayer(contentsOf: soundDir.appendingPathComponent(name)) else { return false }
+        p.prepareToPlay()
+        player = p
+        file = name
+        return true
+    }
+
+    func play(from t: Double?, volume: Float) {
+        guard let p = player else { return }
+        if let t = t { p.currentTime = max(0, min(t, p.duration - 0.2)) }
+        p.volume = volume
+        p.play()
+        ticker?.invalidate()
+        let tk = Timer(timeInterval: 0.2, repeats: true) { [weak self] _ in self?.emit() }
+        RunLoop.main.add(tk, forMode: .common)
+        ticker = tk
+        emit()
+    }
+
+    func pause() { player?.pause(); emit() }
+
+    func seek(_ t: Double) {
+        guard let p = player else { return }
+        p.currentTime = max(0, min(t, p.duration - 0.2))
+        emit()
+    }
+
+    func stop() {
+        ticker?.invalidate()
+        ticker = nil
+        player?.stop()
+        player = nil
+        file = nil
+    }
+
+    private func emit() {
+        guard let p = player else { return }
+        onPosition?(p.currentTime, p.isPlaying, p.duration)
+        if !p.isPlaying { ticker?.invalidate(); ticker = nil }
+    }
+}
+
 // ───────── 시간이 끝나면 모든 창 위(전체화면 앱 위 포함)에 뜨는 알림 창 ─────────
 final class AlertPanel: NSPanel {
     override var canBecomeKey: Bool { true }
@@ -136,6 +189,7 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
     var onAction: ((String) -> Void)?
     var onYouTubeFailed: (() -> Void)?
     var onYouTubePlaying: (() -> Void)?
+    var onStartPicked: ((Double) -> Void)?
 
     func show(title: String, body: String, songTitle: String?, image: NSImage?,
               youtube: YouTubeAlarm?, actions: [[String: String]], preview: Bool = false) {
@@ -308,6 +362,14 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
 
     @objc private func tap(_ sender: NSButton) {
         let id = sender.identifier?.rawValue ?? "ok"
+        if id == "setStart", let web = player {
+            web.evaluateJavaScript("window.player && player.getCurrentTime ? player.getCurrentTime() : -1") { [weak self] result, _ in
+                let sec = (result as? Double) ?? Double(result as? Int ?? -1)
+                self?.close()
+                self?.onStartPicked?(sec)
+            }
+            return
+        }
         close()
         onAction?(id)
     }
@@ -336,6 +398,8 @@ final class Bridge: NSObject, WKScriptMessageHandler {
     private let io = DispatchQueue(label: "charactertimer.save")
     let sound = SoundPlayer()
     let overlay = FinishOverlay()
+    let editor = EditorPlayer()
+    private var previewAlarmId = ""
 
     private var fallbackVolume: Float = 0.8
     private var fallbackMaxSec: Double = 30
@@ -359,6 +423,15 @@ final class Bridge: NSObject, WKScriptMessageHandler {
                             volume: self.fallbackVolume, maxSec: self.overlay.isPreview ? 3 : self.fallbackMaxSec)
         }
         overlay.onYouTubePlaying = { [weak self] in self?.sound.stop() }
+        overlay.onStartPicked = { [weak self] sec in
+            guard let self = self else { return }
+            self.sound.stop()
+            if sec >= 0 { self.sendJS("__startPicked", ["id": self.previewAlarmId, "sec": sec]) }
+            self.web?.evaluateJavaScript("window.__previewClosed && window.__previewClosed()")
+        }
+        editor.onPosition = { [weak self] t, playing, duration in
+            self?.sendJS("__editPos", ["t": t, "playing": playing, "duration": duration])
+        }
     }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -379,17 +452,36 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             let vol = body["volume"] as? Double ?? 0.8
             if let yt = youTube(spec, volume: vol, maxSec: 0) {
                 fallbackVolume = Float(vol)
+                previewAlarmId = body["alarmId"] as? String ?? ""
                 sound.stop()
-                overlay.show(title: "미리 듣기", body: "알람이 울리면 이렇게 이 지점부터 나와요.",
-                             songTitle: spec["title"] as? String, image: nil, youtube: yt,
-                             actions: [["id": "closePreview", "label": "닫기"]], preview: true)
+                editor.stop()
+                let m = yt.start / 60, s = yt.start % 60
+                overlay.show(title: spec["title"] as? String ?? "미리 듣기",
+                             body: String(format: "%d:%02d부터", m, s),
+                             songTitle: nil, image: nil, youtube: yt,
+                             actions: [["id": "setStart", "label": "여기서 시작"], ["id": "closePreview", "label": "닫기"]],
+                             preview: true)
             } else {
                 if overlay.isPreview { overlay.close() }
+                editor.stop()
                 sound.play(spec, loop: false, volume: Float(vol), maxSec: 15)
             }
         case "stopSound":
             sound.stop()
             if overlay.isPreview { overlay.close() }
+        case "editLoad":
+            if editor.load(body["file"] as? String ?? "") { editor.seek(body["t"] as? Double ?? 0) }
+        case "editPlay":
+            sound.stop()
+            if editor.load(body["file"] as? String ?? "") {
+                editor.play(from: body["t"] as? Double, volume: Float(body["volume"] as? Double ?? 0.8))
+            }
+        case "editPause":
+            editor.pause()
+        case "editSeek":
+            editor.seek(body["t"] as? Double ?? 0)
+        case "editStop":
+            editor.stop()
         case "ytInfo":
             ytInfo(url: body["url"] as? String ?? "", videoId: body["videoId"] as? String ?? "")
         case "finish":
@@ -601,9 +693,28 @@ final class DragStrip: NSView {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     var window: NSWindow!
     let bridge = Bridge()
+    private var shown = false
+
+    /// 화면이 다 그려진 뒤에 창을 부드럽게 띄운다(검은 화면 깜빡임 없이).
+    private func reveal() {
+        guard !shown else { return }
+        shown = true
+        window.alphaValue = 0
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.35
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            window.animator().alphaValue = 1
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.reveal() }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let config = WKWebViewConfiguration()
@@ -615,6 +726,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                        injectionTime: .atDocumentStart, forMainFrameOnly: true))
 
         let web = WKWebView(frame: .zero, configuration: config)
+        web.navigationDelegate = self
         web.setValue(false, forKey: "drawsBackground")
         web.autoresizingMask = [.width, .height]
         if let url = Bundle.main.url(forResource: "index", withExtension: "html") {
@@ -642,13 +754,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.setFrameAutosaveName("CharacterTimerStudy")
         bridge.web = web
         bridge.window = window
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.reveal() }   // 혹시 늦어지면 그냥 띄우기
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
     func applicationWillTerminate(_ notification: Notification) {
+        bridge.editor.stop()
         bridge.sound.stop()
         bridge.overlay.close()
     }
