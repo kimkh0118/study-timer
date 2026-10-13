@@ -64,7 +64,7 @@ final class SoundPlayer {
     private var stopTimer: Timer?
 
     /// spec: {type: "system", name} | {type: "file", file, start} | {type: "none"}
-    func play(_ spec: [String: Any], loop: Bool, volume: Float, maxSec: Double) {
+    func play(_ spec: [String: Any], loop: Bool, volume: Float, maxSec: Double, fadeIn: Bool = true) {
         stop()
         let type = spec["type"] as? String ?? "system"
         if type == "none" { return }
@@ -74,10 +74,10 @@ final class SoundPlayer {
             p.numberOfLoops = loop ? -1 : 0
             let start = spec["start"] as? Double ?? 0
             if start > 0, start < p.duration - 1 { p.currentTime = start }
-            p.volume = 0
+            p.volume = fadeIn ? 0 : volume
             p.prepareToPlay()
             p.play()
-            p.setVolume(volume, fadeDuration: 1.5)   // 갑자기 크게 나오지 않게 서서히
+            if fadeIn { p.setVolume(volume, fadeDuration: 1.5) }   // 알람은 갑자기 크게 나오지 않게 서서히
             player = p
         } else {
             let name = spec["name"] as? String ?? "Glass"
@@ -501,7 +501,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
                 if overlay.isPreview { overlay.close() }
                 editor.stop()
                 let loop = body["loop"] as? Bool ?? false
-                sound.play(spec, loop: loop, volume: Float(vol), maxSec: loop ? 0 : 15)
+                sound.play(spec, loop: loop, volume: Float(vol), maxSec: loop ? 0 : 15, fadeIn: false)
             }
         case "setVolume":
             let v = body["volume"] as? Double ?? 0.8

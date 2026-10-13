@@ -1878,19 +1878,33 @@ function currentAlarmSpec() {
   }
   return [specForPick(s.alarmPick === "none" ? "sys:Glass" : s.alarmPick), ""];
 }
-function onVolumeInput(v) {
+let lastTick = 0;
+function onVolumeInput(v, released) {
   state.settings.volume = v;
   $$("[data-volume], #alarmVol").forEach((el) => { if (Number(el.value) !== v) el.value = v; });
+  const [sound, alarmId] = currentAlarmSpec();
+
+  // 유튜브 알람은 창을 띄우지 않고, Mac 볼륨처럼 짧은 소리로 크기만 들려줘요.
+  if (sound.type === "youtube" || sound.type === "none") {
+    const now = Date.now();
+    if (released || now - lastTick > 220) {
+      lastTick = now;
+      if (NATIVE) post("previewSound", { sound: { type: "system", name: "Pop" }, volume: v });
+      else chime();
+    }
+    if (released) save();
+    return;
+  }
+
   if (!volPreview) {
     volPreview = true;
     if (typeof stopPreview === "function") stopPreview();
     if (typeof closeNowbar === "function") closeNowbar();
-    const [sound, alarmId] = currentAlarmSpec();
     if (NATIVE) post("previewSound", { sound, volume: v, alarmId, loop: true });
     else chime();
   } else post("setVolume", { volume: v });
   clearTimeout(volTimer);
-  volTimer = setTimeout(endVolumePreview, 2200);
+  volTimer = setTimeout(endVolumePreview, released ? 1000 : 1600);
 }
 function endVolumePreview() {
   clearTimeout(volTimer);
@@ -1901,6 +1915,9 @@ function endVolumePreview() {
 }
 document.addEventListener("input", (e) => {
   if (e.target.matches("[data-volume], #alarmVol")) onVolumeInput(Number(e.target.value));
+});
+document.addEventListener("change", (e) => {
+  if (e.target.matches("[data-volume], #alarmVol")) onVolumeInput(Number(e.target.value), true);
 });
 
 /* ════════════════ 간소화 ════════════════ */
