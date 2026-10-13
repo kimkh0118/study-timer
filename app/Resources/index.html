@@ -282,6 +282,35 @@
   .subj-row { display: grid; grid-template-columns: 28px 1fr 28px; gap: 8px; align-items: center; margin-bottom: 6px; }
   .swatch { width: 22px; height: 22px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 2px rgba(0,0,0,.25); }
   .subj-add { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 4px; }
+  .snd-pick { display: inline-flex; gap: 6px; align-items: center; }
+  .snd-pick select.field { width: 190px; }
+  .play { width: 32px; height: 32px; padding: 0; display: grid; place-items: center; }
+  .play svg { width: 12px; height: 12px; }
+  .play[aria-pressed="true"] { background: var(--pin); color: #fff; }
+  .songs { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+  .song { display: grid; grid-template-columns: 1fr auto auto 28px; gap: 8px; align-items: center; padding: 8px 10px 8px 14px; border-radius: 14px; background: rgba(255,255,255,.05); }
+  .song .name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 600; }
+  .song .name small { display: block; font-weight: 400; color: var(--faint); font-size: 11px; margin-top: 2px; }
+  .song .stepper b { min-width: 52px; font-size: 13px; }
+  .song .stepper .soft { width: 28px; height: 28px; min-width: 28px; font-size: 15px; }
+  .range-row input[type=range] { width: 170px; flex: none; }
+
+  /* 브라우저에서 열었을 때 쓰는 알림 창 (앱에서는 Mac 알림 창이 대신 떠요) */
+  .alert {
+    position: fixed; top: 16px; left: 50%; z-index: 30; transform: translateX(-50%);
+    width: min(540px, calc(100vw - 32px)); border-radius: 30px; padding: 22px;
+    display: grid; grid-template-columns: 124px 1fr; gap: 22px; align-items: center;
+    background: rgba(28, 28, 32, .72);
+    animation: drop .28s ease;
+  }
+  .alert[hidden] { display: none; }
+  @keyframes drop { from { transform: translate(-50%, -20px); opacity: 0; } }
+  .alert img { width: 124px; height: 124px; border-radius: 24px; object-fit: cover; }
+  .alert h2 { margin: 0; font-size: 26px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .alert h2::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--pin); }
+  .alert p { margin: 6px 0 14px; color: var(--dim); font-size: 14px; line-height: 1.45; }
+  .alert .row-btns { display: flex; gap: 8px; }
+  .alert .btn { height: 36px; padding: 0 18px; font-size: 14px; border-radius: 18px; }
 
   /* 토스트 */
   .toast {
@@ -400,6 +429,15 @@
   </div>
 
   <div class="toast glass" id="toast" role="status"></div>
+
+  <div class="alert glass" id="alertBox" role="alertdialog" aria-labelledby="alertTitle" hidden>
+    <img id="alertImg" alt="">
+    <div>
+      <h2 id="alertTitle"></h2>
+      <p id="alertBody"></p>
+      <div class="row-btns" id="alertBtns"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -436,10 +474,12 @@ function defaults() {
       goalMin: 240, timerMin: 50,
       focusMin: 25, breakMin: 5, longBreakMin: 15, longEvery: 4,
       sound: true, onTop: false, dim: 0.15,
+      overlay: true, focusSound: "sys:Glass", breakSound: "sys:Hero", volume: 0.8, maxSec: 30,
       mode: "timer", subject: subjects[0].id,
     },
     wallpapers: [],
     wallpaper: "b1",
+    sounds: [],
     active: null,
   };
 }
@@ -450,6 +490,14 @@ function migrate(raw) {
   const s = { ...base, ...raw };
   s.settings = { ...base.settings, ...(raw.settings || {}) };
   if (!Array.isArray(s.sessions)) s.sessions = [];
+  if (!Array.isArray(s.sounds)) s.sounds = [];
+  if (raw.settings && raw.settings.sound === false && raw.settings.focusSound === undefined) {
+    s.settings.focusSound = "none"; s.settings.breakSound = "none";      // 예전 "소리 끄기" 설정 이어받기
+  }
+  for (const k of ["focusSound", "breakSound"]) {
+    const v = s.settings[k];
+    if (v.startsWith("file:") && !s.sounds.some((x) => "file:" + x.id === v)) s.settings[k] = base.settings[k];
+  }
   if (!Array.isArray(s.subjects) || !s.subjects.length) s.subjects = base.subjects;
   const users = (Array.isArray(raw.wallpapers) ? raw.wallpapers : []).filter((w) => w && w.kind === "user");
   s.wallpapers = [...BUILTIN, ...users];
@@ -536,6 +584,7 @@ function plannedSec() {
 }
 
 function start() {
+  hideAlert();
   if (!run) run = { phase: "focus", target: plannedSec(), before: 0, startedAt: null, sessionStart: Date.now(), subject: state.settings.subject };
   run.startedAt = Date.now();
   scheduleAlarm();
@@ -560,6 +609,7 @@ function commitFocus() {
   }
   state.active = null;
   writeNow();
+  return sec;
 }
 function clearRun() {
   run = null;
@@ -570,6 +620,7 @@ function clearRun() {
 }
 function stopByUser() {
   if (!run) return;
+  hideAlert();
   if (run.phase === "focus") commitFocus();
   else pomoRound = run.kind === "long" ? 1 : pomoRound + 1;
   clearRun();
@@ -577,23 +628,31 @@ function stopByUser() {
 }
 function complete() {
   const r = run;
-  signal();
   if (r.phase === "focus") {
-    commitFocus();
+    const sec = commitFocus();
+    const subj = subjectOf(r.subject).name;
     if (mode() === "pomo") {
       const long = pomoRound % state.settings.longEvery === 0;
       const min = long ? state.settings.longBreakMin : state.settings.breakMin;
       run = { phase: "break", kind: long ? "long" : "short", target: min * 60, before: 0, startedAt: Date.now(), sessionStart: Date.now(), subject: r.subject };
       scheduleAlarm();
       renderAll();
+      notify("focus", long ? "집중 끝! 길게 쉬어요" : "집중 끝! 쉬는 시간이에요",
+        `${subj} ${fmtDur(sec)} 기록했어요. ${min}분 쉬고 오면 다시 알려 줄게요.`,
+        [["ok", "확인"], ["skipBreak", "휴식 건너뛰기"]]);
       return;
     }
-  } else {
-    pomoRound = r.kind === "long" ? 1 : pomoRound + 1;
-    toast("쉬는 시간이 끝났어요. 다음 집중을 시작하세요");
+    clearRun();
+    renderAll();
+    notify("focus", "집중 끝!",
+      `${subj} ${fmtDur(sec)} 기록했어요. 오늘 모두 ${fmtDur(totalsByDay()[dayKey(Date.now())] || 0)} 공부했어요.`,
+      [["ok", "확인"], ["more5", "5분 더"]]);
+    return;
   }
+  pomoRound = r.kind === "long" ? 1 : pomoRound + 1;
   clearRun();
   renderAll();
+  notify("break", "휴식 끝", `${pomoRound}번째 집중을 시작할 시간이에요.`, [["startFocus", "집중 시작"], ["ok", "나중에"]]);
 }
 function checkpoint(force) {
   if (!run || run.phase !== "focus") return;
@@ -606,11 +665,67 @@ function checkpoint(force) {
 function scheduleAlarm() {
   if (run && run.startedAt && run.target != null) post("alarm", { at: run.startedAt + (run.target - run.before) * 1000 });
 }
-function signal() {
-  $("#ring").classList.remove("flash"); void $("#ring").offsetWidth; $("#ring").classList.add("flash");
-  if (NATIVE) post("attention", { sound: state.settings.sound });
-  else if (state.settings.sound) chime();
+/* ════════════════ 끝났을 때 알림 (맨 위 알림 창 + 노래) ════════════════ */
+const SYSTEM_SOUNDS = ["Glass", "Hero", "Ping", "Purr", "Submarine", "Funk", "Blow", "Bottle", "Frog", "Morse", "Pop", "Sosumi", "Tink", "Basso"];
+
+/* "sys:Glass" | "file:<id>" | "none" → Mac에 보낼 소리 정보 */
+function resolveSound(sel) {
+  if (!sel || sel === "none") return { type: "none" };
+  if (sel.startsWith("file:")) {
+    const s = state.sounds.find((x) => "file:" + x.id === sel);
+    return s ? { type: "file", file: s.file, start: s.start || 0 } : { type: "system", name: "Glass" };
+  }
+  return { type: "system", name: sel.slice(4) || "Glass" };
 }
+
+function notify(kind, title, body, actions) {
+  const s = state.settings;
+  const sound = resolveSound(kind === "break" ? s.breakSound : s.focusSound);
+  const w = currentWall();
+  $("#ring").classList.remove("flash"); void $("#ring").offsetWidth; $("#ring").classList.add("flash");
+  if (NATIVE) {
+    post("finish", {
+      title, body, sound, volume: s.volume, overlay: s.overlay,
+      maxSec: s.overlay ? s.maxSec : Math.min(s.maxSec || 10, 30),
+      image: w.src, focus: w.focus || "50% 30%",
+      actions: actions.map(([id, label]) => ({ id, label })),
+    });
+  } else {
+    if (sound.type !== "none") chime();
+    if (s.overlay) showAlert(title, body, actions, w.src);
+  }
+}
+
+function showAlert(title, body, actions, img) {
+  $("#alertTitle").textContent = title;
+  $("#alertBody").textContent = body;
+  $("#alertImg").src = img;
+  $("#alertBtns").innerHTML = actions.map(([id, label], i) => `<button class="btn ${i === 0 ? "primary" : ""}" data-act="${id}">${esc(label)}</button>`).join("");
+  $("#alertBox").hidden = false;
+  $("#alertBtns button").focus();
+}
+function hideAlert() {
+  $("#alertBox").hidden = true;
+  post("dismiss");
+}
+$("#alertBtns").onclick = (e) => {
+  const b = e.target.closest("button[data-act]");
+  if (b) { hideAlert(); overlayAction(b.dataset.act); }
+};
+
+/* 알림 창 버튼 */
+function overlayAction(id) {
+  if (id === "more5" && !run) {
+    run = { phase: "focus", target: 300, before: 0, startedAt: null, sessionStart: Date.now(), subject: state.settings.subject };
+    start();
+    toast("5분 더 집중해요");
+  } else if (id === "skipBreak" && run && run.phase === "break") {
+    stopByUser();
+  } else if (id === "startFocus" && !run) {
+    start();
+  }
+}
+window.__overlayAction = overlayAction;
 function chime() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -800,6 +915,7 @@ $("#adjust").onclick = (e) => {
   save(); renderAll();
 };
 document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("#alertBox").hidden) { hideAlert(); return; }
   if (e.key === "Escape" && !$("#sheetWrap").hidden) { closeSheet(); return; }
   const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   if (e.code === "Space" && !typing && $("#sheetWrap").hidden) { e.preventDefault(); $("#go").click(); }
@@ -814,7 +930,7 @@ function openSheet(title, render) {
   render();
   $("#sheetClose").focus();
 }
-function closeSheet() { $("#sheetWrap").hidden = true; sheetRender = null; }
+function closeSheet() { $("#sheetWrap").hidden = true; sheetRender = null; stopPreview(); }
 $("#sheetClose").onclick = closeSheet;
 $("#sheetWrap").addEventListener("mousedown", (e) => { if (e.target.id === "sheetWrap") closeSheet(); });
 
@@ -1021,8 +1137,17 @@ function renderSettings() {
         <div class="group" style="margin-top:18px"><h3>뽀모도로</h3>
           ${stepper("focusMin", "집중")}${stepper("breakMin", "짧은 휴식")}${stepper("longBreakMin", "긴 휴식")}${stepper("longEvery", "긴 휴식 간격")}
         </div>
-        <div class="group" style="margin-top:18px"><h3>알림과 기록</h3>
-          <div class="set-row"><span>끝나면 소리 내기</span><button class="switch" role="switch" data-toggle="sound" aria-checked="${state.settings.sound}" aria-label="끝나면 소리 내기"></button></div>
+        <div class="group" style="margin-top:18px"><h3>끝났을 때 알림</h3>
+          <div class="set-row"><span>화면 맨 위에 알림 창 띄우기</span><button class="switch" role="switch" data-toggle="overlay" aria-checked="${state.settings.overlay}" aria-label="화면 맨 위에 알림 창 띄우기"></button></div>
+          ${soundRow("focusSound", "집중이 끝나면")}
+          ${soundRow("breakSound", "휴식이 끝나면")}
+          <div class="set-row range-row"><span>소리 크기</span><input type="range" min="0.1" max="1" step="0.05" value="${state.settings.volume}" data-volume aria-label="소리 크기"></div>
+          <div class="set-row"><span>노래 재생 시간</span>
+            <select class="field" data-maxsec aria-label="노래 재생 시간">
+              ${[[30, "30초"], [60, "1분"], [180, "3분"], [0, "확인 누를 때까지"]].map(([v, l]) => `<option value="${v}" ${state.settings.maxSec === v ? "selected" : ""}>${l}</option>`).join("")}
+            </select></div>
+        </div>
+        <div class="group" style="margin-top:18px"><h3>기록</h3>
           <div class="set-row"><span>모든 기록을 엑셀 파일(CSV)로</span><button class="soft" data-export>내보내기</button></div>
         </div>
       </div>
@@ -1038,9 +1163,57 @@ function renderSettings() {
           <button class="soft" type="submit">추가</button>
         </form>
         <p class="hint" style="margin-top:10px">과목을 지워도 지난 기록은 남아요. 색 동그라미를 누르면 색이 바뀌어요.</p>
+
+        <h3 style="margin-top:22px">내 노래</h3>
+        <div class="songs">
+          ${state.sounds.length ? state.sounds.map((s) => `
+            <div class="song">
+              <span class="name">${esc(s.label)}<small>${fmtClock(s.duration || 0)} · ${(s.start || 0) ? fmtClock(s.start) + "부터 재생" : "처음부터 재생"}</small></span>
+              <span class="stepper">
+                <button class="soft" data-start="${s.id}" data-d="-5" aria-label="시작 지점 5초 앞으로" ${(s.start || 0) <= 0 ? "disabled" : ""}>−</button>
+                <b class="num">${fmtClock(s.start || 0)}</b>
+                <button class="soft" data-start="${s.id}" data-d="5" aria-label="시작 지점 5초 뒤로" ${(s.start || 0) + 5 >= (s.duration || 0) ? "disabled" : ""}>+</button>
+              </span>
+              ${playBtn("file:" + s.id, s.label)}
+              <button class="x close" data-delsound="${s.id}" aria-label="${esc(s.label)} 지우기" style="width:28px;height:28px">${X_ICON}</button>
+            </div>`).join("") : `<p class="hint" style="margin:0 0 4px">아직 넣은 노래가 없어요. 좋아하는 노래 파일을 넣으면 알람으로 쓸 수 있어요.</p>`}
+        </div>
+        ${NATIVE ? `<button class="soft" data-addsound>노래 추가</button>` : `<p class="hint">노래 추가는 Mac 앱에서만 돼요.</p>`}
+        <p class="hint" style="margin-top:10px">mp3, m4a, wav 파일을 쓸 수 있어요. 멜론·애플뮤직 같은 스트리밍 곡은 저작권 보호 때문에 쓸 수 없어요. −/+로 하이라이트가 시작되는 지점을 정해 두면 그 부분부터 울려요.</p>
       </div>
     </div>`;
 }
+
+const PLAY_ICON = '<svg viewBox="0 0 12 12" fill="currentColor"><path d="M2.5 1.5v9l8-4.5z"/></svg>';
+const STOP_ICON = '<svg viewBox="0 0 12 12" fill="currentColor"><rect x="2" y="2" width="8" height="8" rx="1.5"/></svg>';
+let previewing = null;
+function playBtn(sel, label) {
+  const on = previewing === sel;
+  return `<button class="soft play" data-preview="${sel}" aria-pressed="${on}" aria-label="${esc(label)} ${on ? "멈추기" : "미리 듣기"}">${on ? STOP_ICON : PLAY_ICON}</button>`;
+}
+function soundRow(key, label) {
+  const v = state.settings[key];
+  const opt = (val, text) => `<option value="${val}" ${v === val ? "selected" : ""}>${esc(text)}</option>`;
+  return `<div class="set-row"><span>${label}</span><span class="snd-pick">
+    <select class="field" data-soundsel="${key}" aria-label="${label} 소리">
+      ${opt("none", "소리 없음")}
+      ${state.sounds.length ? `<optgroup label="내 노래">${state.sounds.map((s) => opt("file:" + s.id, s.label)).join("")}</optgroup>` : ""}
+      <optgroup label="Mac 기본 소리">${SYSTEM_SOUNDS.map((n) => opt("sys:" + n, n)).join("")}</optgroup>
+    </select>
+    ${v === "none" ? "" : playBtn(v, label)}</span></div>`;
+}
+function stopPreview() {
+  if (!previewing) return;
+  previewing = null;
+  post("stopSound");
+}
+window.__soundsAdded = ({ added = [], failed = [] }) => {
+  for (const a of added) state.sounds.push({ id: uid(), file: a.file, label: a.label, duration: a.duration, start: 0 });
+  writeNow();
+  if (sheetRender === renderSettings) renderSettings();
+  if (added.length) toast(`노래 ${added.length}곡을 넣었어요`);
+  if (failed.length) setTimeout(() => toast(`재생할 수 없는 파일 ${failed.length}개는 뺐어요 (저작권 보호 파일은 안 돼요)`), added.length ? 2700 : 0);
+};
 
 $("#sheetBody").addEventListener("click", (e) => {
   if (sheetRender !== renderSettings) return;
@@ -1059,10 +1232,38 @@ $("#sheetBody").addEventListener("click", (e) => {
     if (state.settings.subject === t.dataset.drop) state.settings.subject = state.subjects[0].id;
   } else if (t.dataset.export !== undefined) {
     exportCSV(); return;
+  } else if (t.dataset.preview) {
+    const sel = t.dataset.preview;
+    if (previewing === sel) stopPreview();
+    else {
+      previewing = sel;
+      if (NATIVE) post("previewSound", { sound: resolveSound(sel), volume: state.settings.volume });
+      else chime();
+      clearTimeout(window.__previewTimer);
+      window.__previewTimer = setTimeout(() => { previewing = null; if (sheetRender === renderSettings) renderSettings(); }, 15000);
+    }
+    renderSettings(); return;
+  } else if (t.dataset.addsound !== undefined) {
+    post("pickSounds"); return;
+  } else if (t.dataset.delsound) {
+    const s = state.sounds.find((x) => x.id === t.dataset.delsound);
+    if (previewing === "file:" + t.dataset.delsound) stopPreview();
+    state.sounds = state.sounds.filter((x) => x.id !== t.dataset.delsound);
+    for (const k of ["focusSound", "breakSound"]) if (state.settings[k] === "file:" + t.dataset.delsound) state.settings[k] = k === "breakSound" ? "sys:Hero" : "sys:Glass";
+    if (s) post("deleteSound", { name: s.file });
+    writeNow(); renderSettings(); return;
+  } else if (t.dataset.start) {
+    const s = state.sounds.find((x) => x.id === t.dataset.start);
+    s.start = Math.max(0, Math.min((s.duration || 0) - 5, (s.start || 0) + Number(t.dataset.d)));
+    if (previewing === "file:" + s.id) post("previewSound", { sound: resolveSound("file:" + s.id), volume: state.settings.volume });
   } else return;
   save(); renderSettings(); renderAll();
 });
 $("#sheetBody").addEventListener("change", (e) => {
+  const d = e.target.dataset;
+  if (d.soundsel) { stopPreview(); state.settings[d.soundsel] = e.target.value; save(); renderSettings(); return; }
+  if (d.maxsec !== undefined) { state.settings.maxSec = Number(e.target.value); save(); return; }
+  if (d.volume !== undefined) { state.settings.volume = Number(e.target.value); save(); return; }
   const id = e.target.dataset.rename;
   if (!id) return;
   const name = e.target.value.trim();
