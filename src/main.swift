@@ -307,8 +307,9 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
 
         // 유튜브 플레이어는 YouTube 규칙상 200×200 이상 보여야 해서 창을 크게 써요.
         let hasVideo = youtube != nil
+        let hasSong = !(songTitle ?? "").isEmpty
         let W: CGFloat = hasVideo ? 724 : 540
-        let H: CGFloat = hasVideo ? 264 : 172
+        let H: CGFloat = hasVideo ? 264 : (hasSong ? 200 : 172)
         let x = screen.frame.midX - W / 2
         let y = screen.visibleFrame.maxY - H - 18     // 메뉴 막대 바로 아래
 
@@ -395,7 +396,7 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
             songLabel.font = .systemFont(ofSize: 12, weight: .medium)
             songLabel.textColor = NSColor(white: 1, alpha: 0.55)
             songLabel.lineBreakMode = .byTruncatingTail
-            songLabel.frame = NSRect(x: leftEdge, y: 66, width: textW, height: 18)
+            songLabel.frame = NSRect(x: leftEdge, y: bodyLabel.frame.minY - 22, width: textW, height: 18)   // 본문 바로 아래(겹치지 않게)
             glass.addSubview(songLabel)
         }
 
@@ -705,7 +706,11 @@ final class Bridge: NSObject, WKScriptMessageHandler {
                 return
             }
             if volSound.isPlaying { volSound.setVolume(v) }
-            else { volSound.play(["type": "bundle", "name": (body["name"] as? String) ?? "piano.caf"], loop: true, volume: v, maxSec: 0, fadeIn: false) }
+            else {
+                // 지금 알람으로 고른 소리로 들려줘요(없으면 피아노)
+                let spec = body["sound"] as? [String: Any] ?? ["type": "bundle", "name": "piano.caf"]
+                volSound.play(spec, loop: true, volume: v, maxSec: 0, fadeIn: false)
+            }
         case "volPreviewStop":
             volSound.fadeOutAndStop(0.5)
         case "setVolume":

@@ -1717,7 +1717,18 @@ $("#pinTop").onclick = () => {
 };
 
 /* ════════════════ 소리 크기: 지금 알람을 들으면서 조절 ════════════════ */
-let volPreview = false, volTimer = null;
+let volPreview = false, volTimer = null, volSpec = null;
+/* 소리 크기 맞출 때 들려줄 소리: 고른 알람 (랜덤이면 랜덤 목록 안에서 하나) */
+function previewAlarmSpec() {
+  const s = state.settings;
+  let key = s.alarmPick;
+  if (s.alarmMode === "random") {
+    const pool = s.alarmSet.filter(soundByKey);
+    key = pool.length ? pool[Math.floor(Math.random() * pool.length)] : DEFAULT_SOUND;
+  }
+  if (!key || key === "none" || !soundByKey(key)) key = DEFAULT_SOUND;
+  return soundByKey(key).spec;
+}
 /* 소리 크기: 다른 소리가 안 나면 잔잔한 음악을 틀어 두고 맞춰요.
    노래를 듣는 중이거나 알림이 울리는 중이면 그 소리 크기만 바꿔요(멈추거나 닫지 않아요). */
 function onVolumeInput(v, released) {
@@ -1729,7 +1740,8 @@ function onVolumeInput(v, released) {
     if (released) save();
     return;
   }
-  if (NATIVE) post("volPreview", { volume: v });
+  if (!volPreview) volSpec = previewAlarmSpec();      // 이번에 들려줄 소리는 한 번만 골라요
+  if (NATIVE) post("volPreview", { volume: v, sound: volSpec });
   else if (!volPreview) chime();
   volPreview = true;
   clearTimeout(volTimer);
