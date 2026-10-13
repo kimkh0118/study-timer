@@ -790,6 +790,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             w.styleMask.remove(.resizable)
             w.isMovable = false                     // 간소화 창은 오른쪽 위에 고정
             w.isMovableByWindowBackground = false
+            (web as? CTWebView)?.dragLocked = true      // 눌러서 끌어도 아무 일 없게
             w.level = .floating                     // 항상 위에
             w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]   // 데스크탑을 옮겨도 따라와요
             buttons.forEach { w.standardWindowButton($0)?.isHidden = true }
@@ -803,6 +804,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             normalFrame = nil
             w.styleMask.insert(.resizable)
             w.isMovable = true
+            (web as? CTWebView)?.dragLocked = false
             w.level = onTop ? .floating : .normal
             w.collectionBehavior = []
             buttons.forEach { w.standardWindowButton($0)?.isHidden = false }
@@ -1049,6 +1051,13 @@ final class Bridge: NSObject, WKScriptMessageHandler {
 }
 
 // ───────── 창 맨 위를 잡고 끌 수 있는 띠 ─────────
+/// 간소화 중에는 끌기 동작을 무시하는 웹 화면(클릭은 그대로 돼요).
+final class CTWebView: WKWebView {
+    var dragLocked = false
+    override func mouseDragged(with event: NSEvent) { if !dragLocked { super.mouseDragged(with: event) } }
+    override var mouseDownCanMoveWindow: Bool { false }
+}
+
 final class DragStrip: NSView {
     override var mouseDownCanMoveWindow: Bool { true }
     override func mouseDown(with event: NSEvent) {
@@ -1092,7 +1101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         ucc.addUserScript(WKUserScript(source: "window.__NATIVE__ = true; window.__INITIAL__ = \(loadInitialJSON());",
                                        injectionTime: .atDocumentStart, forMainFrameOnly: true))
 
-        let web = WKWebView(frame: .zero, configuration: config)
+        let web = CTWebView(frame: .zero, configuration: config)
         web.navigationDelegate = self
         web.setValue(false, forKey: "drawsBackground")
         web.autoresizingMask = [.width, .height]
