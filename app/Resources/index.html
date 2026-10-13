@@ -358,8 +358,9 @@
   .paste + .yt-hint { margin: 10px 4px 0; }
   .tiles-head { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin: 18px 2px 10px; min-height: 20px; }
   .tiles-head .search { width: 220px; margin: 0; height: 34px; }
-  .tiles-head.empty { min-height: 0; margin: 16px 0 0; }
-  .tiles-head.empty > * { display: none; }
+  .tiles-head .vol { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; color: var(--dim); }
+  .tiles-head .vol svg { width: 16px; height: 16px; }
+  .tiles-head .vol input { width: 140px; accent-color: #fff; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 14px; }
   .tile {
     position: relative; padding: 8px 8px 12px; border-radius: 20px; cursor: pointer;
@@ -1150,7 +1151,7 @@ function openSheet(title, render) {
   render();
   $("#sheetClose").focus();
 }
-function closeSheet() { $("#sheetWrap").hidden = true; sheetRender = null; stopPreview(); closeNowbar(); }
+function closeSheet() { $("#sheetWrap").hidden = true; sheetRender = null; stopPreview(); closeNowbar(); endVolumePreview(); }
 $("#sheetClose").onclick = closeSheet;
 $("#sheetWrap").addEventListener("mousedown", (e) => { if (e.target.id === "sheetWrap") closeSheet(); });
 
@@ -1465,6 +1466,10 @@ function renderAlarms() {
     <div class="yt-hint" id="ytHint"></div>
     <div class="tiles-head">
       <span class="hint num" id="pickCount"></span>
+      <label class="vol" title="소리 크기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+        <input type="range" id="alarmVol" min="0.1" max="1" step="0.05" value="${state.settings.volume}" aria-label="소리 크기">
+      </label>
       ${state.alarms.length > 5 ? `<input class="field search" id="alarmSearch" type="search" placeholder="검색" value="${esc(alarmQuery)}" aria-label="알람 검색">` : ""}
     </div>
     <div class="tiles" id="alarmList"></div>
@@ -1480,7 +1485,6 @@ function renderAlarmList() {
   const list = state.alarms.filter((a) => !q || a.title.toLowerCase().includes(q));
   const n = state.alarms.filter((a) => a.use).length;
   $("#pickCount").textContent = single ? "" : n ? `${n}곡 중 랜덤` : "고른 곡이 없으면 기본 알림음";
-  $(".tiles-head").classList.toggle("empty", single && !$("#alarmSearch"));
 
   const sysTile = single && !q ? `
     <div class="tile ${s.alarmPick.startsWith("sys:") || s.alarmPick === "none" ? "sel" : ""} ${previewing === "sys" ? "on" : ""}" data-tile="sys" role="button" tabindex="0" aria-label="기본 알림음">
@@ -1859,6 +1863,45 @@ $("#pinTop").onclick = () => {
   applyOnTop(); save();
   toast(state.settings.onTop ? "항상 위에" : "항상 위에 끔");
 };
+
+/* ════════════════ 소리 크기: 지금 알람을 들으면서 조절 ════════════════ */
+let volPreview = false, volTimer = null;
+function currentAlarmSpec() {
+  const s = state.settings;
+  if (s.alarmMode === "random") {
+    const a = state.alarms.find((x) => x.use);
+    return a ? [alarmSpec(a), a.id] : [{ type: "system", name: "Glass" }, ""];
+  }
+  if (s.alarmPick.startsWith("a:")) {
+    const a = state.alarms.find((x) => "a:" + x.id === s.alarmPick);
+    if (a) return [alarmSpec(a), a.id];
+  }
+  return [specForPick(s.alarmPick === "none" ? "sys:Glass" : s.alarmPick), ""];
+}
+function onVolumeInput(v) {
+  state.settings.volume = v;
+  $$("[data-volume], #alarmVol").forEach((el) => { if (Number(el.value) !== v) el.value = v; });
+  if (!volPreview) {
+    volPreview = true;
+    if (typeof stopPreview === "function") stopPreview();
+    if (typeof closeNowbar === "function") closeNowbar();
+    const [sound, alarmId] = currentAlarmSpec();
+    if (NATIVE) post("previewSound", { sound, volume: v, alarmId, loop: true });
+    else chime();
+  } else post("setVolume", { volume: v });
+  clearTimeout(volTimer);
+  volTimer = setTimeout(endVolumePreview, 2200);
+}
+function endVolumePreview() {
+  clearTimeout(volTimer);
+  if (!volPreview) return;
+  volPreview = false;
+  post("stopSound");
+  save();
+}
+document.addEventListener("input", (e) => {
+  if (e.target.matches("[data-volume], #alarmVol")) onVolumeInput(Number(e.target.value));
+});
 
 /* ════════════════ 간소화 ════════════════ */
 let compact = false;

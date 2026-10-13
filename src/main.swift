@@ -96,6 +96,12 @@ final class SoundPlayer {
         }
     }
 
+    /// 재생 중인 소리 크기를 바로 바꾸기 (설정에서 들으며 조절)
+    func setVolume(_ v: Float) {
+        player?.volume = v
+        system?.volume = v
+    }
+
     func fadeOutAndStop() {
         guard let p = player else { stop(); return }
         p.setVolume(0, fadeDuration: 1.2)
@@ -145,6 +151,8 @@ final class EditorPlayer {
     }
 
     func pause() { player?.pause(); emit() }
+
+    func setVolume(_ v: Float) { player?.volume = v }
 
     func seek(_ t: Double) {
         guard let p = player else { return }
@@ -377,6 +385,11 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
         return web
     }
 
+    /// 알림 창 안 유튜브 소리 크기 바꾸기
+    func setVolume(_ v: Double) {
+        player?.evaluateJavaScript("(function(){var x=document.querySelector('video'); if(x) x.volume=\(max(0, min(1, v)));})()")
+    }
+
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let m = message.body as? [String: Any] else { return }
         if m["playing"] != nil { onYouTubePlaying?() }
@@ -487,8 +500,15 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             } else {
                 if overlay.isPreview { overlay.close() }
                 editor.stop()
-                sound.play(spec, loop: false, volume: Float(vol), maxSec: 15)
+                let loop = body["loop"] as? Bool ?? false
+                sound.play(spec, loop: loop, volume: Float(vol), maxSec: loop ? 0 : 15)
             }
+        case "setVolume":
+            let v = body["volume"] as? Double ?? 0.8
+            fallbackVolume = Float(v)
+            sound.setVolume(Float(v))
+            editor.setVolume(Float(v))
+            overlay.setVolume(v)
         case "stopSound":
             sound.stop()
             if overlay.isPreview { overlay.close() }
