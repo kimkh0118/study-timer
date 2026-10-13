@@ -1,3 +1,5 @@
+"""잔잔한 피아노(sounds/piano.caf)를 코드로 만들어요. python3 tools/make_preview_music.py"""
+import os, subprocess
 import numpy as np
 from scipy.io import wavfile
 from scipy.signal import lfilter
@@ -52,4 +54,6 @@ for d,g in ((0.137,0.25),(0.211,0.2),(0.293,0.15),(0.377,0.1)):
     sh=int(d*SR); out+=np.roll(out,sh,axis=0)*g*0.6
 out=np.tanh(out*1.1); out/=np.abs(out).max()/0.85
 wavfile.write("/tmp/loop.wav",SR,(out*32767).astype(np.int16))
+dest=os.path.join(os.path.dirname(__file__),"..","app","Resources","sounds","piano.caf")
+subprocess.run(["ffmpeg","-loglevel","error","-y","-i","/tmp/loop.wav","-c:a","alac",dest],check=True)
 print(L/SR)

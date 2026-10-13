@@ -301,10 +301,6 @@
   .alarm-top .hint { margin: 0; }
   .alarm-add { display: grid; grid-template-columns: 1.6fr 1fr 84px auto auto; gap: 8px; align-items: center; }
   .alarm-add .field { height: 38px; }
-  .yt-hint { min-height: 18px; margin: 8px 2px 14px; font-size: 12px; color: var(--faint); display: flex; gap: 10px; align-items: center; }
-  .yt-hint img { width: 64px; height: 36px; border-radius: 6px; object-fit: cover; }
-  .yt-hint.bad { color: #ff8a8a; }
-  .yt-hint:empty { display: none; }
   .alarm-add { margin-bottom: 12px; }
   .search { width: 100%; height: 38px; margin-bottom: 10px; padding-left: 36px !important;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-opacity='.5' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-4-4'/%3E%3C/svg%3E");
@@ -331,13 +327,9 @@
   }
   .play.big { width: 40px; height: 40px; border-radius: 50%; }
   .play.big svg { width: 14px; height: 14px; }
-  .scrub { position: relative; height: 24px; display: flex; align-items: center; }
-  .scrub input { width: 100%; margin: 0; accent-color: #fff; }
-  .scrub .start-mark { position: absolute; left: var(--start); top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--pin); border-radius: 1px; pointer-events: none; }
   .etime { font-size: 12px; color: var(--dim); min-width: 84px; text-align: right; }
   .btn.sm { height: 34px; padding: 0 14px; font-size: 13px; border-radius: 17px; }
   .check { width: 22px; height: 22px; accent-color: var(--pin); cursor: pointer; }
-  .empty-alarm { padding: 24px; text-align: center; color: var(--faint); border-radius: 16px; border: 1.5px dashed rgba(255,255,255,.18); }
 
   /* ───────── 알람 창 ───────── */
   .sheet-head { gap: 12px; }
@@ -356,7 +348,6 @@
   .paste input::placeholder { color: var(--faint); }
   .paste .soft { height: 36px; padding: 0 16px; }
   .paste-sep { width: 1px; height: 22px; background: var(--line); }
-  .paste + .yt-hint { margin: 10px 4px 0; }
   .tiles-head { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin: 18px 2px 10px; min-height: 20px; }
   .tiles-head .search { width: 220px; margin: 0; height: 34px; }
   .tiles-head .vol { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; color: var(--dim); }
@@ -381,7 +372,6 @@
   .song-text { min-width: 0; }
   .song-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .song-text .hint { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .test-chip { color: var(--pin); }
   .snd-group { margin: 18px 4px 10px; font-size: 12px; font-weight: 700; letter-spacing: .02em; color: var(--dim); }
   .tiles-head + .snd-group { margin-top: 4px; }
   .tile {
@@ -402,7 +392,7 @@
   }
   .art-ph.sys { background: linear-gradient(135deg, #3a3a42, #1d1d22); }
   .art-ph svg { width: 26px; height: 26px; }
-  .t-play, .t-del, .t-edit, .t-check { position: absolute; display: grid; place-items: center; border-radius: 50%; transition: opacity .18s, transform .18s; }
+  .t-play, .t-del, .t-check { position: absolute; display: grid; place-items: center; border-radius: 50%; transition: opacity .18s, transform .18s; }
   .t-play {
     left: 50%; top: 50%; width: 42px; height: 42px; margin: -21px 0 0 -21px;
     background: rgba(0,0,0,.45); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
@@ -410,9 +400,6 @@
   }
   .t-play svg { width: 14px; height: 14px; }
   .t-del { right: 6px; top: 6px; width: 24px; height: 24px; background: rgba(0,0,0,.55); opacity: 0; }
-  .t-edit { right: 36px; top: 6px; width: 24px; height: 24px; background: rgba(0,0,0,.55); opacity: 0; }
-  .t-edit svg { width: 11px; height: 11px; }
-  .tile:hover .t-edit, .t-edit:focus-visible { opacity: 1; }
   .t-del svg { width: 10px; height: 10px; }
   .tile:hover .t-play, .tile.on .t-play, .t-play:focus-visible { opacity: 1; transform: scale(1); }
   .tile:hover .t-del, .t-del:focus-visible { opacity: 1; }
@@ -423,15 +410,6 @@
   .t-title { margin: 10px 4px 0; font-size: 13px; font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.7em; }
   .t-rename { width: 100%; font: inherit; border: 0; border-radius: 6px; padding: 2px 4px; background: rgba(255,255,255,.14); color: #fff; outline: none; }
   .t-meta { margin: 4px 4px 0; font-size: 11px; color: var(--faint); }
-  .empty-alarm { grid-column: 1 / -1; }
-  .nowbar {
-    position: sticky; bottom: 0; margin-top: 16px; z-index: 2;
-    display: grid; grid-template-columns: auto minmax(80px, 160px) 1fr auto auto 28px; gap: 12px; align-items: center;
-    padding: 10px 12px 10px 10px; border-radius: 22px; background: rgba(30,30,36,.82);
-    animation: rise .2s ease;
-  }
-  .nowbar[hidden] { display: none; }
-  .now-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* ───────── 간소화 ───────── */
   .mini { display: none; }
@@ -857,6 +835,16 @@ function stopByUser() {
   clearRun();
   renderAll();
 }
+/* 알림 문구: "수학 50분 집중했어요" / "오늘 2시간 30분 · 목표까지 1시간 30분" */
+function focusLine(subj, sec) {
+  if (sec < 60) return "1분이 안 돼서 기록하지 않았어요";
+  return `${subj} ${fmtDur(sec)} 집중했어요`;
+}
+function todayLine() {
+  const total = totalsByDay()[dayKey(Date.now())] || 0;
+  const left = state.settings.goalMin * 60 - total;
+  return left > 0 ? `오늘 ${fmtDur(total)} · 목표까지 ${fmtDur(left)}` : `오늘 ${fmtDur(total)} · 오늘 목표 달성`;
+}
 function complete() {
   const r = run;
   if (r.phase === "focus") {
@@ -869,21 +857,21 @@ function complete() {
       scheduleAlarm();
       renderAll();
       notify("focus", "집중 끝",
-        `${subj} ${fmtDur(sec)}\n${min}분 휴식`,
+        `${focusLine(subj, sec)}\n이제 ${min}분 쉬어요`,
         [["ok", "확인"], ["skipBreak", "휴식 건너뛰기"]]);
       return;
     }
     clearRun();
     renderAll();
     notify("focus", "집중 끝",
-      `${subj} ${fmtDur(sec)}\n오늘 ${fmtDur(totalsByDay()[dayKey(Date.now())] || 0)}`,
+      `${focusLine(subj, sec)}\n${todayLine()}`,
       [["ok", "확인"], ["more5", "5분 더"]]);
     return;
   }
   pomoRound = r.kind === "long" ? 1 : pomoRound + 1;
   clearRun();
   renderAll();
-  notify("break", "휴식 끝", `${pomoRound}번째 집중`, [["startFocus", "집중 시작"], ["ok", "나중에"]]);
+  notify("break", "휴식 끝", `${pomoRound}번째 집중을 시작할까요?`, [["startFocus", "집중 시작"], ["ok", "나중에"]]);
 }
 function checkpoint(force) {
   if (!run || run.phase !== "focus") return;
@@ -1059,8 +1047,7 @@ function renderControls() {
   if (mode() === "timer") {
     const t = state.settings.timerMin;
     adj.innerHTML = [25, 50, 90].map((m) => `<button class="soft" data-min="${m}" aria-pressed="${t === m}">${m}분</button>`).join("")
-      + `<button class="soft" data-step="-5" aria-label="5분 줄이기" ${t <= 5 ? "disabled" : ""}>−</button><button class="soft" data-step="5" aria-label="5분 늘리기" ${t >= 300 ? "disabled" : ""}>+</button>`
-      + `<button class="soft test-chip" data-test aria-label="10초 알림 시험">10초</button>`;   // 임시: 알림 시험용
+      + `<button class="soft" data-step="-5" aria-label="5분 줄이기" ${t <= 5 ? "disabled" : ""}>−</button><button class="soft" data-step="5" aria-label="5분 늘리기" ${t >= 300 ? "disabled" : ""}>+</button>`;
   } else if (mode() === "pomo") {
     const s = state.settings;
     const done = pomoRound - 1 + (run && run.phase === "break" ? 1 : 0);
@@ -1170,11 +1157,6 @@ $("#subjects").onclick = (e) => {
 $("#adjust").onclick = (e) => {
   const b = e.target.closest("button");
   if (!b || run) return;
-  if (b.dataset.test !== undefined) {           // 임시: 10초 뒤 알림이 제대로 뜨는지 시험 (1분 미만이라 기록은 안 남아요)
-    run = { phase: "focus", target: 10, before: 0, startedAt: null, sessionStart: Date.now(), subject: state.settings.subject, test: true };
-    start();
-    return;
-  }
   if (b.dataset.min) state.settings.timerMin = Number(b.dataset.min);
   if (b.dataset.step) state.settings.timerMin = Math.min(300, Math.max(5, state.settings.timerMin + Number(b.dataset.step)));
   save(); renderAll();
@@ -1196,7 +1178,7 @@ function openSheet(title, render) {
   render();
   $("#sheetClose").focus();
 }
-function closeSheet() { $("#sheetWrap").hidden = true; sheetRender = null; stopPreview(); closeNowbar(); endVolumePreview(); }
+function closeSheet() { $("#sheetWrap").hidden = true; sheetRender = null; stopPreview(); endVolumePreview(); }
 $("#sheetClose").onclick = closeSheet;
 $("#sheetWrap").addEventListener("mousedown", (e) => { if (e.target.id === "sheetWrap") closeSheet(); });
 
@@ -1451,9 +1433,6 @@ const CHECK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 
 let previewing = null;                         // 지금 미리 듣는 소리 키
 let previewTimer = null;
-const listening = null;                        // (예전 파일 알람용, 이제 안 써요)
-const editPos = { playing: false };
-function closeNowbar() {}
 
 function renderAlarms() {
   const s = state.settings;

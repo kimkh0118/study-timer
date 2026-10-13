@@ -8,14 +8,13 @@ import AVFoundation
 let supportDir: URL = {
     let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("CharacterTimer", isDirectory: true)
-    for sub in ["Wallpapers", "Sounds"] {
+    for sub in ["Wallpapers"] {
         try? FileManager.default.createDirectory(at: base.appendingPathComponent(sub, isDirectory: true),
                                                  withIntermediateDirectories: true)
     }
     return base
 }()
 let wallDir = supportDir.appendingPathComponent("Wallpapers", isDirectory: true)
-let soundDir = supportDir.appendingPathComponent("Sounds", isDirectory: true)
 let dataFile = supportDir.appendingPathComponent("data.json")
 let backupFile = supportDir.appendingPathComponent("data.backup.json")
 
@@ -57,7 +56,7 @@ final class WallpaperScheme: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) {}
 }
 
-// ───────── 알람 소리: 시스템 소리 또는 내가 넣은 노래 ─────────
+// ───────── 알람 소리: Mac 효과음 · 앱에 든 음악 · Apple 미리 듣기(30초) ─────────
 /// Apple 미리 듣기 주소인지 확인 (https + Apple 서버만)
 func isApplePreview(_ u: URL) -> Bool {
     guard u.scheme == "https", let h = u.host?.lowercased() else { return false }
@@ -130,7 +129,7 @@ final class SoundPlayer {
         streamStatus = nil
     }
 
-    /// spec: {type: "system", name} | {type: "file", file, start} | {type: "none"}
+    /// spec: {type: "system", name} | {type: "bundle", name} | {type: "stream", url} | {type: "none"}
     func play(_ spec: [String: Any], loop: Bool, volume: Float, maxSec: Double, fadeIn: Bool = true) {
         stop()
         let type = spec["type"] as? String ?? "system"
@@ -147,7 +146,6 @@ final class SoundPlayer {
         }
 
         var url: URL?
-        if type == "file", let file = spec["file"] as? String, isSafeName(file) { url = soundDir.appendingPathComponent(file) }
         if type == "bundle", let name = spec["name"] as? String, name.range(of: "^[a-z0-9-]+\\.caf$", options: .regularExpression) != nil {
             url = Bundle.main.resourceURL?.appendingPathComponent("sounds").appendingPathComponent(name)
         }
@@ -215,62 +213,6 @@ final class SoundPlayer {
     }
 }
 
-// ───────── 시작 지점 고를 때 쓰는 재생기 (들으면서 위치 옮기기) ─────────
-final class EditorPlayer {
-    private var player: AVAudioPlayer?
-    private var file: String?
-    private var ticker: Timer?
-    var onPosition: ((Double, Bool, Double) -> Void)?
-
-    @discardableResult
-    func load(_ name: String) -> Bool {
-        if file == name, player != nil { return true }
-        stop()
-        guard isSafeName(name), let p = try? AVAudioPlayer(contentsOf: soundDir.appendingPathComponent(name)) else { return false }
-        p.prepareToPlay()
-        player = p
-        file = name
-        return true
-    }
-
-    func play(from t: Double?, volume: Float) {
-        guard let p = player else { return }
-        if let t = t { p.currentTime = max(0, min(t, p.duration - 0.2)) }
-        p.volume = volume
-        p.play()
-        ticker?.invalidate()
-        let tk = Timer(timeInterval: 0.2, repeats: true) { [weak self] _ in self?.emit() }
-        RunLoop.main.add(tk, forMode: .common)
-        ticker = tk
-        emit()
-    }
-
-    func pause() { player?.pause(); emit() }
-
-    func setVolume(_ v: Float) { player?.volume = v }
-    var isPlaying: Bool { player?.isPlaying ?? false }
-
-    func seek(_ t: Double) {
-        guard let p = player else { return }
-        p.currentTime = max(0, min(t, p.duration - 0.2))
-        emit()
-    }
-
-    func stop() {
-        ticker?.invalidate()
-        ticker = nil
-        player?.stop()
-        player = nil
-        file = nil
-    }
-
-    private func emit() {
-        guard let p = player else { return }
-        onPosition?(p.currentTime, p.isPlaying, p.duration)
-        if !p.isPlaying { ticker?.invalidate(); ticker = nil }
-    }
-}
-
 // ───────── 시간이 끝나면 모든 창 위(전체화면 앱 위 포함)에 뜨는 알림 창 ─────────
 final class AlertPanel: NSPanel {
     var onCancel: (() -> Void)?
@@ -279,37 +221,18 @@ final class AlertPanel: NSPanel {
     override func cancelOperation(_ sender: Any?) { onCancel?() }      // Esc
 }
 
-/// 알림 창에서 틀 유튜브 영상
-struct YouTubeAlarm {
-    let videoId: String
-    let start: Int
-    let volume: Int      // 0~100
-    let maxSec: Double   // 0이면 확인 누를 때까지
-}
-
-final class FinishOverlay: NSObject, WKScriptMessageHandler {
+final class FinishOverlay: NSObject {
     private var panel: AlertPanel?
-    private var player: WKWebView?
-    private var pauseTimer: Timer?
-    private(set) var isPreview = false
-    private var currentVolume: Double = 0.8
     var isShowing: Bool { panel != nil }
     var onAction: ((String) -> Void)?
-    var onYouTubeFailed: (() -> Void)?
-    var onYouTubePlaying: (() -> Void)?
-    var onStartPicked: ((Double) -> Void)?
 
-    func show(title: String, body: String, songTitle: String?, image: NSImage?,
-              youtube: YouTubeAlarm?, actions: [[String: String]], preview: Bool = false) {
+    func show(title: String, body: String, songTitle: String?, image: NSImage?, actions: [[String: String]]) {
         close()
-        isPreview = preview
         guard let screen = NSScreen.main else { return }
 
-        // 유튜브 플레이어는 YouTube 규칙상 200×200 이상 보여야 해서 창을 크게 써요.
-        let hasVideo = youtube != nil
         let hasSong = !(songTitle ?? "").isEmpty
-        let W: CGFloat = hasVideo ? 724 : 540
-        let H: CGFloat = hasVideo ? 264 : (hasSong ? 200 : 172)
+        let W: CGFloat = 540
+        let H: CGFloat = hasSong ? 200 : 172
         let x = screen.frame.midX - W / 2
         let y = screen.visibleFrame.maxY - H - 18     // 메뉴 막대 바로 아래
 
@@ -324,8 +247,7 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
         p.hidesOnDeactivate = false
         p.isMovableByWindowBackground = true
         p.isReleasedWhenClosed = false
-        let cancelId = preview ? "closePreview" : "ok"
-        p.onCancel = { [weak self] in self?.close(); self?.onAction?(cancelId) }
+        p.onCancel = { [weak self] in self?.close(); self?.onAction?("ok") }
 
         let glass = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: W, height: H))
         glass.material = .hudWindow
@@ -339,37 +261,21 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
         glass.layer?.borderColor = NSColor(white: 1, alpha: 0.22).cgColor
         p.contentView = glass
 
-        var leftEdge: CGFloat
-        if let yt = youtube {
-            let vw: CGFloat = 384, vh: CGFloat = 216
-            let web = makePlayer(yt, frame: NSRect(x: 22, y: (H - vh) / 2, width: vw, height: vh))
-            glass.addSubview(web)
-            player = web
-            currentVolume = Double(yt.volume) / 100.0
-            leftEdge = 22 + vw + 24
-            if yt.maxSec > 0 {
-                let t = Timer(timeInterval: yt.maxSec, repeats: false) { [weak self] _ in
-                    self?.player?.evaluateJavaScript("window.__ctPause && window.__ctPause()")
-                }
-                RunLoop.main.add(t, forMode: .common)
-                pauseTimer = t
-            }
-        } else {
-            let side: CGFloat = 124
-            let pic = NSView(frame: NSRect(x: 24, y: (H - side) / 2, width: side, height: side))
-            pic.wantsLayer = true
-            pic.layer?.cornerRadius = 24
-            pic.layer?.masksToBounds = true
-            pic.layer?.contentsGravity = .resizeAspectFill
-            pic.layer?.contents = image
-            pic.layer?.backgroundColor = NSColor(white: 0, alpha: 0.4).cgColor
-            glass.addSubview(pic)
-            leftEdge = 24 + side + 22
-        }
+        // 왼쪽: 지금 배경 캐릭터
+        let side: CGFloat = 124
+        let pic = NSView(frame: NSRect(x: 24, y: (H - side) / 2, width: side, height: side))
+        pic.wantsLayer = true
+        pic.layer?.cornerRadius = 24
+        pic.layer?.masksToBounds = true
+        pic.layer?.contentsGravity = .resizeAspectFill
+        pic.layer?.contents = image
+        pic.layer?.backgroundColor = NSColor(white: 0, alpha: 0.4).cgColor
+        glass.addSubview(pic)
+        let leftEdge: CGFloat = 24 + side + 22
         let textW = W - leftEdge - 24
 
         // 빨간 점(머리핀 색) + 제목
-        let top = hasVideo ? H - 30 : H - 24
+        let top = H - 24
         let dot = NSView(frame: NSRect(x: leftEdge, y: top - 18, width: 8, height: 8))
         dot.wantsLayer = true
         dot.layer?.cornerRadius = 4
@@ -377,7 +283,7 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
         glass.addSubview(dot)
 
         let titleLabel = NSTextField(labelWithString: title)
-        titleLabel.font = .systemFont(ofSize: hasVideo ? 24 : 26, weight: .bold)
+        titleLabel.font = .systemFont(ofSize: 26, weight: .bold)
         titleLabel.textColor = .white
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.frame = NSRect(x: leftEdge + 16, y: top - 32, width: textW - 16, height: 34)
@@ -386,8 +292,8 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
         let bodyLabel = NSTextField(wrappingLabelWithString: body)
         bodyLabel.font = .systemFont(ofSize: 14)
         bodyLabel.textColor = NSColor(white: 1, alpha: 0.72)
-        bodyLabel.maximumNumberOfLines = hasVideo ? 3 : 2
-        let bodyH: CGFloat = hasVideo ? 60 : 40
+        bodyLabel.maximumNumberOfLines = 2
+        let bodyH: CGFloat = 40
         bodyLabel.frame = NSRect(x: leftEdge, y: top - 40 - bodyH, width: textW, height: bodyH)
         glass.addSubview(bodyLabel)
 
@@ -428,181 +334,15 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
         panel = p
     }
 
-    /// 유튜브 공식 플레이어(IFrame API). 정해 둔 지점부터 재생하고, 끝나면 그 지점부터 다시.
-    /// 유튜브 공식 삽입 플레이어 페이지를 그대로 띄운다.
-    /// (iframe 안에 넣으면 자동 재생이 막혀서 재생 버튼을 한 번 더 눌러야 했어요)
-    /// 유튜브 화면들이 같은 웹 프로세스·캐시를 함께 써서 두 번째부터 빨리 열려요.
-    static let pool = WKProcessPool()
-    static let safariUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15"
-    private var warmView: WKWebView?
-
-    /// 알람 목록을 열 때 유튜브 플레이어를 화면 밖에서 미리 한 번 불러 둬요(소리 없음).
-    func warm(_ videoId: String) {
-        guard warmView == nil, player == nil, videoId.count == 11,
-              videoId.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }) else { return }
-        let config = WKWebViewConfiguration()
-        config.processPool = FinishOverlay.pool
-        let w = WKWebView(frame: NSRect(x: 0, y: 0, width: 384, height: 216), configuration: config)
-        w.customUserAgent = FinishOverlay.safariUA
-        var req = URLRequest(url: URL(string: "https://www.youtube.com/embed/\(videoId)?autoplay=0")!)
-        req.setValue("https://local.kkh.charactertimer/", forHTTPHeaderField: "Referer")
-        w.load(req)
-        warmView = w
-        DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in self?.dropWarm() }
-    }
-    private func dropWarm() {
-        warmView?.stopLoading()
-        warmView?.loadHTMLString("", baseURL: nil)
-        warmView = nil
-    }
-
-    private func makePlayer(_ yt: YouTubeAlarm, frame: NSRect) -> WKWebView {
-        dropWarm()
-        let config = WKWebViewConfiguration()
-        config.processPool = FinishOverlay.pool
-        config.mediaTypesRequiringUserActionForPlayback = []
-        config.userContentController.add(self, name: "yt")
-        // 재생 위치·볼륨·반복만 다루는 작은 스크립트 (YouTube 페이지 안에서 실행)
-        // 유튜브 플레이어 자체 명령(playVideo·setVolume 등)으로 다뤄요.
-        // 화면을 대신 눌러 주는 방식은 이미 재생 중일 때 멈춰 버릴 수 있어서 쓰지 않아요.
-        let control = """
-        (function(){
-          if (window.__ct) return; window.__ct = true;
-          var START=\(yt.start), VOL=\(Double(yt.volume) / 100.0), sent=false, tries=0, kicks=0, clicks=0, lastClick=-99, errTicks=0, held=false, since=0;
-          function send(m){ try{ webkit.messageHandlers.yt.postMessage(m); }catch(e){} }
-          function mp(){ var p=document.getElementById('movie_player'); return (p && typeof p.playVideo==='function') ? p : null; }
-          function vid(){ return document.querySelector('video'); }
-          function applyVol(){
-            var p=mp(), x=vid(), silent = VOL <= 0.001;
-            try { if (p) { if (silent) p.mute(); else { p.unMute(); p.setVolume(Math.round(VOL*100)); } } } catch(e){}
-            if (x) { x.volume = Math.max(0, Math.min(1, VOL)); x.muted = silent; }
-          }
-          function isPlaying(){
-            var p=mp(); try { if (p && p.getPlayerState) return p.getPlayerState() === 1; } catch(e){}
-            var x=vid(); return !!(x && !x.paused && x.readyState > 2);
-          }
-          window.__ctVol = function(v){ VOL = v; applyVol(); };
-          window.__ctTime = function(){ var p=mp(); try { if (p) return p.getCurrentTime(); } catch(e){} var x=vid(); return x ? x.currentTime : -1; };
-          window.__ctPause = function(){ held = true; var p=mp(); try { if (p) { p.pauseVideo(); return; } } catch(e){} var x=vid(); if (x) x.pause(); };
-          function kick(){
-            var p=mp(); if (!p) return;
-            kicks++;
-            try { if (START > 0 && p.getCurrentTime() < START - 1) p.seekTo(START, true); p.playVideo(); } catch(e){}
-          }
-          // 그래도 큰 재생 버튼이 떠 있으면 Mac 쪽에 그 자리를 실제로 눌러 달라고 해요(버튼이 보일 때만).
-          function askClick(){
-            var b = document.querySelector('.ytp-large-play-button');
-            if (!b || !b.offsetParent) return false;
-            var r = b.getBoundingClientRect();
-            if (r.width < 4) return false;
-            send({click:[r.left + r.width/2, r.top + r.height/2]});
-            return true;
-          }
-          var timer = setInterval(function(){
-            tries++;
-            var er = document.querySelector('.ytp-error');
-            if (er && er.offsetParent && er.getBoundingClientRect().height > 20 && (er.textContent||'').trim().length > 0) { errTicks++; } else errTicks = 0;
-            if (errTicks >= 10) { clearInterval(timer); send({error:'blocked'}); return; }
-            if (isPlaying()) { applyVol(); if (!sent) { sent = true; send({playing:true}); } clearInterval(timer); return; }
-            if (tries % 3 === 1) kick();
-            var st = -1; try { var q = mp(); if (q) st = q.getPlayerState(); } catch(e){}
-            if ((st === -1 || st === 5 || st === 2) && tries >= 5 && clicks < 3 && tries - lastClick >= 15 && askClick()) { clicks++; lastClick = tries; }
-            if (tries > 200) { clearInterval(timer); send({error:'timeout'}); }
-          }, 100);
-          // 끝나면 정해 둔 지점부터 다시
-          setInterval(function(){
-            var p=mp(); if (!sent || !p) return;
-            try {
-              var st = p.getPlayerState();
-              if (st === 0) { p.seekTo(START, true); p.playVideo(); }
-              // 소리를 켜는 순간 유튜브가 멈춰 버리면 처음 몇 초 동안은 다시 틀어요
-              else if (st === 2 && !held && since < 12) { p.playVideo(); }
-              if (since < 12) { since++; applyVol(); }
-            } catch(e){}
-          }, 500);
-        })();
-        """
-        config.userContentController.addUserScript(WKUserScript(source: control, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
-
-        let web = WKWebView(frame: frame, configuration: config)
-        // 앱 속 웹 화면 기본 정보로는 유튜브가 자동 재생을 꺼 버려서, 일반 Safari라고 알려 줘요.
-        web.customUserAgent = FinishOverlay.safariUA
-        web.wantsLayer = true
-        web.layer?.cornerRadius = 14
-        web.layer?.masksToBounds = true
-        var comps = URLComponents(string: "https://www.youtube.com/embed/\(yt.videoId)")!
-        comps.queryItems = [
-            URLQueryItem(name: "autoplay", value: "1"),
-            URLQueryItem(name: "mute", value: "1"),        // 소리 없는 자동 재생은 유튜브가 항상 허용해요 → 시작되면 바로 소리 켜기
-            URLQueryItem(name: "start", value: String(yt.start)),
-            URLQueryItem(name: "playsinline", value: "1"),
-            URLQueryItem(name: "rel", value: "0"),
-        ]
-        var req = URLRequest(url: comps.url!)
-        // YouTube는 삽입 플레이어를 쓰는 앱이 Referer로 자신을 밝히도록 요구해요.
-        req.setValue("https://local.kkh.charactertimer/", forHTTPHeaderField: "Referer")
-        web.load(req)
-        return web
-    }
-
-    /// 알림 창 안 유튜브 소리 크기 바꾸기
-    /// 재생 중이든 아직 불러오는 중이든 마지막으로 정한 크기를 기억했다가 적용해요.
-    func setVolume(_ v: Double) {
-        currentVolume = max(0, min(1, v))
-        player?.evaluateJavaScript("window.__ctVol && window.__ctVol(\(currentVolume))")
-    }
-
-    /// 플레이어 안의 한 점(웹 페이지 좌표)을 실제 마우스처럼 눌러요. 유튜브가 자동 재생을 막을 때만 써요.
-    private func realClick(_ web: WKWebView, x: Double, y: Double) {
-        guard let win = web.window else { return }
-        let local = NSPoint(x: x, y: web.isFlipped ? y : Double(web.bounds.height) - y)
-        let pt = web.convert(local, to: nil)
-        let now = ProcessInfo.processInfo.systemUptime
-        guard let down = NSEvent.mouseEvent(with: .leftMouseDown, location: pt, modifierFlags: [], timestamp: now,
-                                            windowNumber: win.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1),
-              let up = NSEvent.mouseEvent(with: .leftMouseUp, location: pt, modifierFlags: [], timestamp: now + 0.05,
-                                          windowNumber: win.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 0)
-        else { return }
-        web.mouseDown(with: down)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { web.mouseUp(with: up) }
-    }
-
-    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard let m = message.body as? [String: Any] else { return }
-        if m["playing"] != nil {
-            setVolume(currentVolume)
-            onYouTubePlaying?()
-        }
-        if let c = m["click"] as? [Double], c.count == 2, let web = player { realClick(web, x: c[0], y: c[1]) }
-        if m["error"] != nil { onYouTubeFailed?() }
-    }
-
     @objc private func tap(_ sender: NSButton) {
         let id = sender.identifier?.rawValue ?? "ok"
-        if id == "setStart", let web = player {
-            web.evaluateJavaScript("window.__ctTime ? window.__ctTime() : -1") { [weak self] result, _ in
-                let sec = (result as? Double) ?? Double(result as? Int ?? -1)
-                self?.close()
-                self?.onStartPicked?(sec)
-            }
-            return
-        }
         close()
         onAction?(id)
     }
 
     func close() {
-        pauseTimer?.invalidate()
-        pauseTimer = nil
-        if let web = player {
-            web.configuration.userContentController.removeScriptMessageHandler(forName: "yt")
-            web.loadHTMLString("", baseURL: nil)      // 소리 바로 끊기
-            web.removeFromSuperview()
-        }
-        player = nil
         panel?.orderOut(nil)
         panel = nil
-        isPreview = false
     }
 }
 
@@ -616,8 +356,6 @@ final class Bridge: NSObject, WKScriptMessageHandler {
     let sound = SoundPlayer()
     let volSound = SoundPlayer()      // 소리 크기 맞출 때만 쓰는 음악 (다른 소리와 따로)
     let overlay = FinishOverlay()
-    let editor = EditorPlayer()
-    private var previewAlarmId = ""
 
     private var fallbackVolume: Float = 0.8
     private var ringing = false      // 지금 소리가 진짜 알람인지(미리 듣기가 아니라)
@@ -628,25 +366,14 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         overlay.onAction = { [weak self] id in
             guard let self = self else { return }
             self.sound.stop()
-            if id == "closePreview" {
-                self.web?.evaluateJavaScript("window.__previewClosed && window.__previewClosed()")
-                return
-            }
+            self.ringing = false
             let safe = id.filter { $0.isLetter || $0.isNumber }
             self.web?.evaluateJavaScript("window.__overlayAction && window.__overlayAction('\(safe)')")
         }
-        // 영상이 막혔거나 인터넷이 끊기면 기본 소리로 대신 울려요.
-        overlay.onYouTubeFailed = { [weak self] in
-            guard let self = self, !self.overlay.isPreview else { return }   // 미리 듣기에선 벨소리로 대신하지 않아요
-            self.sound.play(["type": "system", "name": "Glass"], loop: !self.overlay.isPreview,
-                            volume: self.fallbackVolume, maxSec: self.overlay.isPreview ? 3 : self.fallbackMaxSec)
-        }
-        overlay.onYouTubePlaying = { [weak self] in self?.sound.stop() }
-        overlay.onStartPicked = { [weak self] sec in
+        // 소리 크기 맞추는 중에 노래를 못 불러오면 피아노로 대신
+        volSound.onStreamFailed = { [weak self] in
             guard let self = self else { return }
-            self.sound.stop()
-            if sec >= 0 { self.sendJS("__startPicked", ["id": self.previewAlarmId, "sec": sec]) }
-            self.web?.evaluateJavaScript("window.__previewClosed && window.__previewClosed()")
+            self.volSound.play(["type": "bundle", "name": "piano.caf"], loop: true, volume: self.fallbackVolume, maxSec: 0, fadeIn: false)
         }
         // Apple 미리 듣기를 못 불러오면: 알람이면 기본 소리로 대신 울리고, 미리 듣기면 화면에 알려요.
         sound.onStreamFailed = { [weak self] in
@@ -656,9 +383,6 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             } else {
                 self.sendJS("__previewFailed", [:])
             }
-        }
-        editor.onPosition = { [weak self] t, playing, duration in
-            self?.sendJS("__editPos", ["t": t, "playing": playing, "duration": duration])
         }
     }
 
@@ -671,76 +395,37 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             pickWallpapers()
         case "deleteWallpaper":
             if let n = body["name"] as? String, isSafeName(n) { try? FileManager.default.removeItem(at: wallDir.appendingPathComponent(n)) }
-        case "pickSounds":
-            pickSounds()
-        case "deleteSound":
-            if let n = body["name"] as? String, isSafeName(n) { try? FileManager.default.removeItem(at: soundDir.appendingPathComponent(n)) }
         case "previewSound":
+            // 알람 목록에서 ▶ 눌러 듣기
             volSound.stop()
             ringing = false
             let spec = body["sound"] as? [String: Any] ?? [:]
             let vol = body["volume"] as? Double ?? 0.8
-            if let yt = youTube(spec, volume: vol, maxSec: 0) {
-                fallbackVolume = Float(vol)
-                previewAlarmId = body["alarmId"] as? String ?? ""
-                sound.stop()
-                editor.stop()
-                let m = yt.start / 60, s = yt.start % 60
-                overlay.show(title: spec["title"] as? String ?? "미리 듣기",
-                             body: String(format: "%d:%02d부터", m, s),
-                             songTitle: nil, image: nil, youtube: yt,
-                             actions: [["id": "setStart", "label": "여기서 시작"], ["id": "closePreview", "label": "닫기"]],
-                             preview: true)
-            } else {
-                if overlay.isPreview { overlay.close() }
-                editor.stop()
-                let loop = body["loop"] as? Bool ?? false
-                sound.play(spec, loop: loop, volume: Float(vol), maxSec: loop ? 0 : 15, fadeIn: false)
-            }
+            let loop = body["loop"] as? Bool ?? false
+            sound.play(spec, loop: loop, volume: Float(vol), maxSec: loop ? 0 : 35, fadeIn: false)
         case "volPreview":
-            // 소리 크기 맞추기용 음악. 다른 소리가 이미 나는 중이면 그 크기만 바꿔요.
+            // 소리 크기 맞출 때: 고른 알람을 틀어 두고 크기를 바꿔요. 다른 소리가 나는 중이면 그 크기만 바꿔요.
             let v = Float(body["volume"] as? Double ?? 0.8)
-            if overlay.isShowing || sound.isPlaying || editor.isPlaying {
+            fallbackVolume = v
+            if overlay.isShowing || sound.isPlaying {
                 fallbackVolume = v
-                sound.setVolume(v); editor.setVolume(v); overlay.setVolume(Double(v))
+                sound.setVolume(v)
                 return
             }
             if volSound.isPlaying { volSound.setVolume(v) }
             else {
-                // 지금 알람으로 고른 소리로 들려줘요(없으면 피아노)
                 let spec = body["sound"] as? [String: Any] ?? ["type": "bundle", "name": "piano.caf"]
                 volSound.play(spec, loop: true, volume: v, maxSec: 0, fadeIn: false)
             }
         case "volPreviewStop":
             volSound.fadeOutAndStop(0.5)
         case "setVolume":
-            let v = body["volume"] as? Double ?? 0.8
-            fallbackVolume = Float(v)
-            volSound.setVolume(Float(v))
-            sound.setVolume(Float(v))
-            editor.setVolume(Float(v))
-            overlay.setVolume(v)
+            let v = Float(body["volume"] as? Double ?? 0.8)
+            fallbackVolume = v
+            volSound.setVolume(v)
+            sound.setVolume(v)
         case "stopSound":
             sound.stop()
-            if overlay.isPreview { overlay.close() }
-        case "editLoad":
-            if editor.load(body["file"] as? String ?? "") { editor.seek(body["t"] as? Double ?? 0) }
-        case "editPlay":
-            sound.stop()
-            volSound.stop()
-            if editor.load(body["file"] as? String ?? "") {
-                editor.play(from: body["t"] as? Double, volume: Float(body["volume"] as? Double ?? 0.8))
-            }
-        case "editPause":
-            editor.pause()
-        case "editSeek":
-            editor.seek(body["t"] as? Double ?? 0)
-        case "editStop":
-            editor.stop()
-        case "ytWarm":
-            overlay.warm(body["videoId"] as? String ?? "")
-        case "ytInfo":
-            ytInfo(url: body["url"] as? String ?? "", videoId: body["videoId"] as? String ?? "")
         case "finish":
             finish(body)
         case "dismiss":
@@ -749,8 +434,6 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             ringing = false
         case "musicSearch":
             musicSearch(term: body["term"] as? String ?? "", req: body["req"] as? Int ?? 0)
-        case "openURL":
-            if let str = body["url"] as? String, let u = URL(string: str), isApplePreview(u) { NSWorkspace.shared.open(u) }
         case "compact":
             setCompact(body["on"] as? Bool ?? false)
         case "badge":
@@ -820,16 +503,13 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         var maxSec = b["maxSec"] as? Double ?? 30
         if !showOverlay && maxSec <= 0 { maxSec = 10 }      // 끌 버튼이 없으면 무한 반복하지 않게
         let vol = b["volume"] as? Double ?? 0.8
-        var spec = b["sound"] as? [String: Any] ?? [:]
+        let spec = b["sound"] as? [String: Any] ?? [:]
         fallbackVolume = Float(vol)
         fallbackMaxSec = maxSec
         volSound.stop()
         ringing = true
 
-        // 유튜브는 플레이어가 화면에 보여야 해서, 알림 창을 끈 경우엔 기본 소리로 울려요.
-        let yt = showOverlay ? youTube(spec, volume: vol, maxSec: maxSec) : nil
-        if yt == nil, (spec["type"] as? String) == "youtube" { spec = ["type": "system", "name": "Glass"] }
-        if yt == nil { sound.play(spec, loop: true, volume: Float(vol), maxSec: maxSec) } else { sound.stop() }
+        sound.play(spec, loop: true, volume: Float(vol), maxSec: maxSec)
 
         NSApp.requestUserAttention(.criticalRequest)
         guard showOverlay else { return }
@@ -840,20 +520,9 @@ final class Bridge: NSObject, WKScriptMessageHandler {
                      body: b["body"] as? String ?? "",
                      songTitle: spec["title"] as? String,
                      image: squareImage(src: b["image"] as? String ?? "", focus: b["focus"] as? String ?? "50% 30%"),
-                     youtube: yt,
                      actions: actions.isEmpty ? [["id": "ok", "label": "확인"]] : actions)
     }
 
-    /// 재생 정보가 유튜브면 플레이어 설정으로 바꿔 준다(영상 id 검사 포함).
-    private func youTube(_ spec: [String: Any], volume: Double, maxSec: Double) -> YouTubeAlarm? {
-        guard (spec["type"] as? String) == "youtube", let id = spec["videoId"] as? String,
-              id.count == 11, id.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }), id.allSatisfy({ $0.isASCII })
-        else { return nil }
-        let start = max(0, Int(spec["start"] as? Double ?? 0))
-        return YouTubeAlarm(videoId: id, start: start, volume: Int(max(0, min(1, volume)) * 100), maxSec: maxSec)
-    }
-
-    /// 유튜브 oEmbed로 영상 제목을 가져오고, 다른 앱 재생이 막힌 영상인지 확인한다(401/403).
     /// Apple(iTunes) 검색: 노래 제목·가수·앨범 그림·30초 미리 듣기 주소
     /// 한국 스토어는 노래 결과가 비어 있을 때가 많아서 한국·미국·일본 스토어를 같이 찾아 합쳐요.
     private func musicSearch(term: String, req: Int) {
@@ -905,19 +574,6 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         }
     }
 
-    private func ytInfo(url: String, videoId: String) {
-        guard var comps = URLComponents(string: "https://www.youtube.com/oembed") else { return }
-        comps.queryItems = [URLQueryItem(name: "url", value: url), URLQueryItem(name: "format", value: "json")]
-        guard let u = comps.url else { return }
-        URLSession.shared.dataTask(with: u) { [weak self] data, resp, _ in
-            var out: [String: Any] = ["videoId": videoId, "status": (resp as? HTTPURLResponse)?.statusCode ?? 0]
-            if let d = data, let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
-                out["title"] = j["title"] as? String ?? ""
-                out["author"] = j["author_name"] as? String ?? ""
-            }
-            self?.sendJS("__ytInfo", out)
-        }.resume()
-    }
 
     /// 배경 사진에서 얼굴 쪽을 정사각형으로 잘라 온다.
     private func squareImage(src: String, focus: String) -> NSImage? {
@@ -1001,41 +657,6 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         let name = UUID().uuidString.lowercased() + ".jpg"
         do { try jpg.write(to: wallDir.appendingPathComponent(name)) } catch { return nil }
         return ["name": name, "label": url.deletingPathExtension().lastPathComponent]
-    }
-
-    /// 노래 파일을 앱 폴더에 복사한다. 재생할 수 없는 파일(저작권 보호 파일 등)은 빼고 알려 준다.
-    private func pickSounds() {
-        guard let w = window else { return }
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [.audio]
-        panel.message = "알람으로 쓸 노래 파일을 고르세요 (mp3, m4a, wav 등)"
-        panel.prompt = "추가"
-        panel.beginSheetModal(for: w) { [weak self] result in
-            guard let self = self, result == .OK else { return }
-            let urls = panel.urls
-            DispatchQueue.global(qos: .userInitiated).async {
-                var added: [[String: Any]] = []
-                var failed: [String] = []
-                for u in urls {
-                    let ext = u.pathExtension.isEmpty ? "m4a" : u.pathExtension.lowercased()
-                    let name = UUID().uuidString.lowercased() + "." + ext
-                    let dest = soundDir.appendingPathComponent(name)
-                    let label = u.deletingPathExtension().lastPathComponent
-                    do {
-                        try FileManager.default.copyItem(at: u, to: dest)
-                        let p = try AVAudioPlayer(contentsOf: dest)
-                        guard p.duration > 0.5 else { throw NSError(domain: "CharacterTimer", code: 1) }
-                        added.append(["file": name, "label": label, "duration": p.duration])
-                    } catch {
-                        try? FileManager.default.removeItem(at: dest)
-                        failed.append(label)
-                    }
-                }
-                self.sendJS("__soundsAdded", ["added": added, "failed": failed])
-            }
-        }
     }
 
     private func exportCSV(_ csv: String, name: String) {
@@ -1169,7 +790,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     func applicationWillTerminate(_ notification: Notification) {
         NSApp.dockTile.badgeLabel = nil
         if let nf = bridge.normalFrame { window.setFrame(nf, display: false) }   // 다음에 켤 땐 원래 크기로
-        bridge.editor.stop()
         bridge.sound.stop()
         bridge.overlay.close()
     }
