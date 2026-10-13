@@ -832,29 +832,54 @@ final class Bridge: NSObject, WKScriptMessageHandler {
 
     /// 유튜브 oEmbed로 영상 제목을 가져오고, 다른 앱 재생이 막힌 영상인지 확인한다(401/403).
     /// Apple(iTunes) 검색: 노래 제목·가수·앨범 그림·30초 미리 듣기 주소
+    /// 한국 스토어는 노래 결과가 비어 있을 때가 많아서 한국·미국·일본 스토어를 같이 찾아 합쳐요.
     private func musicSearch(term: String, req: Int) {
         let q = term.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty, var comps = URLComponents(string: "https://itunes.apple.com/search") else { return }
-        comps.queryItems = [URLQueryItem(name: "term", value: q), URLQueryItem(name: "country", value: "KR"),
-                            URLQueryItem(name: "media", value: "music"), URLQueryItem(name: "entity", value: "song"),
-                            URLQueryItem(name: "limit", value: "30")]
-        guard let u = comps.url else { return }
-        URLSession.shared.dataTask(with: u) { [weak self] data, resp, err in
-            var items: [[String: Any]] = []
-            if let d = data, let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
-               let results = j["results"] as? [[String: Any]] {
-                for r in results {
-                    guard let id = r["trackId"] as? Int, let prev = r["previewUrl"] as? String else { continue }
-                    var art = r["artworkUrl100"] as? String ?? ""
-                    art = art.replacingOccurrences(of: "100x100bb", with: "300x300bb")
-                    items.append(["id": id, "title": r["trackName"] as? String ?? "", "artist": r["artistName"] as? String ?? "",
-                                  "art": art, "preview": prev, "link": r["trackViewUrl"] as? String ?? "",
-                                  "ms": r["trackTimeMillis"] as? Int ?? 0])
+        guard !q.isEmpty else { return }
+        let countries = ["KR", "US", "JP"]
+        var buckets = [[[String: Any]]](repeating: [], count: countries.count)
+        var anyOK = false
+        let group = DispatchGroup()
+        let lock = NSLock()
+        for (i, c) in countries.enumerated() {
+            guard var comps = URLComponents(string: "https://itunes.apple.com/search") else { continue }
+            comps.queryItems = [URLQueryItem(name: "term", value: q), URLQueryItem(name: "country", value: c),
+                                URLQueryItem(name: "media", value: "music"), URLQueryItem(name: "entity", value: "song"),
+                                URLQueryItem(name: "limit", value: "25")]
+            guard let u = comps.url else { continue }
+            var rq = URLRequest(url: u, timeoutInterval: 10)
+            rq.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
+            group.enter()
+            URLSession.shared.dataTask(with: rq) { data, resp, err in
+                defer { group.leave() }
+                var items: [[String: Any]] = []
+                let ok = err == nil && (resp as? HTTPURLResponse)?.statusCode == 200
+                if let d = data, let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+                   let results = j["results"] as? [[String: Any]] {
+                    for r in results {
+                        guard let id = (r["trackId"] as? NSNumber)?.int64Value, let prev = r["previewUrl"] as? String, !prev.isEmpty else { continue }
+                        var art = r["artworkUrl100"] as? String ?? ""
+                        art = art.replacingOccurrences(of: "100x100bb", with: "300x300bb")
+                        items.append(["id": id, "title": r["trackName"] as? String ?? "", "artist": r["artistName"] as? String ?? "",
+                                      "art": art, "preview": prev, "link": r["trackViewUrl"] as? String ?? ""])
+                    }
+                }
+                lock.lock(); buckets[i] = items; if ok { anyOK = true }; lock.unlock()
+            }.resume()
+        }
+        group.notify(queue: .main) { [weak self] in
+            var seen = Set<String>(), merged: [[String: Any]] = []
+            for list in buckets {
+                for it in list {
+                    let k = "\((it["title"] as? String ?? "").lowercased())|\((it["artist"] as? String ?? "").lowercased())"
+                    let idk = "id:\(it["id"] ?? "")"
+                    if seen.contains(k) || seen.contains(idk) { continue }
+                    seen.insert(k); seen.insert(idk)
+                    merged.append(it)
                 }
             }
-            let ok = err == nil && (resp as? HTTPURLResponse)?.statusCode == 200
-            self?.sendJS("__musicResults", ["req": req, "ok": ok, "items": items])
-        }.resume()
+            self?.sendJS("__musicResults", ["req": req, "ok": anyOK, "items": Array(merged.prefix(40))])
+        }
     }
 
     private func ytInfo(url: String, videoId: String) {
