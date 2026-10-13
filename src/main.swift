@@ -343,8 +343,35 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
     /// 유튜브 공식 플레이어(IFrame API). 정해 둔 지점부터 재생하고, 끝나면 그 지점부터 다시.
     /// 유튜브 공식 삽입 플레이어 페이지를 그대로 띄운다.
     /// (iframe 안에 넣으면 자동 재생이 막혀서 재생 버튼을 한 번 더 눌러야 했어요)
-    private func makePlayer(_ yt: YouTubeAlarm, frame: NSRect) -> WKWebView {
+    /// 유튜브 화면들이 같은 웹 프로세스·캐시를 함께 써서 두 번째부터 빨리 열려요.
+    static let pool = WKProcessPool()
+    static let safariUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15"
+    private var warmView: WKWebView?
+
+    /// 알람 목록을 열 때 유튜브 플레이어를 화면 밖에서 미리 한 번 불러 둬요(소리 없음).
+    func warm(_ videoId: String) {
+        guard warmView == nil, player == nil, videoId.count == 11,
+              videoId.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }) else { return }
         let config = WKWebViewConfiguration()
+        config.processPool = FinishOverlay.pool
+        let w = WKWebView(frame: NSRect(x: 0, y: 0, width: 384, height: 216), configuration: config)
+        w.customUserAgent = FinishOverlay.safariUA
+        var req = URLRequest(url: URL(string: "https://www.youtube.com/embed/\(videoId)?autoplay=0")!)
+        req.setValue("https://local.kkh.charactertimer/", forHTTPHeaderField: "Referer")
+        w.load(req)
+        warmView = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in self?.dropWarm() }
+    }
+    private func dropWarm() {
+        warmView?.stopLoading()
+        warmView?.loadHTMLString("", baseURL: nil)
+        warmView = nil
+    }
+
+    private func makePlayer(_ yt: YouTubeAlarm, frame: NSRect) -> WKWebView {
+        dropWarm()
+        let config = WKWebViewConfiguration()
+        config.processPool = FinishOverlay.pool
         config.mediaTypesRequiringUserActionForPlayback = []
         config.userContentController.add(self, name: "yt")
         // 재생 위치·볼륨·반복만 다루는 작은 스크립트 (YouTube 페이지 안에서 실행)
@@ -353,7 +380,7 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
         let control = """
         (function(){
           if (window.__ct) return; window.__ct = true;
-          var START=\(yt.start), VOL=\(Double(yt.volume) / 100.0), sent=false, tries=0, kicks=0, clicked=false;
+          var START=\(yt.start), VOL=\(Double(yt.volume) / 100.0), sent=false, tries=0, kicks=0, clicks=0, lastClick=-99;
           function send(m){ try{ webkit.messageHandlers.yt.postMessage(m); }catch(e){} }
           function mp(){ var p=document.getElementById('movie_player'); return (p && typeof p.playVideo==='function') ? p : null; }
           function vid(){ return document.querySelector('video'); }
@@ -387,10 +414,11 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
             tries++;
             if (document.querySelector('.ytp-error')) { clearInterval(timer); send({error:'blocked'}); return; }
             if (isPlaying()) { applyVol(); if (!sent) { sent = true; send({playing:true}); } clearInterval(timer); return; }
-            if (tries % 4 === 1) kick();
-            if ((tries === 8 || tries === 24 || tries === 44) && askClick()) clicked = true;
-            if (tries > 100) { clearInterval(timer); send({error:'timeout'}); }
-          }, 150);
+            if (tries % 3 === 1) kick();
+            var st = -1; try { var q = mp(); if (q) st = q.getPlayerState(); } catch(e){}
+            if (st !== 3 && tries >= 2 && clicks < 3 && tries - lastClick >= 10 && askClick()) { clicks++; lastClick = tries; }
+            if (tries > 150) { clearInterval(timer); send({error:'timeout'}); }
+          }, 100);
           // 끝나면 정해 둔 지점부터 다시
           setInterval(function(){
             var p=mp(); if (!sent || !p) return;
@@ -402,7 +430,7 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
 
         let web = WKWebView(frame: frame, configuration: config)
         // 앱 속 웹 화면 기본 정보로는 유튜브가 자동 재생을 꺼 버려서, 일반 Safari라고 알려 줘요.
-        web.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15"
+        web.customUserAgent = FinishOverlay.safariUA
         web.wantsLayer = true
         web.layer?.cornerRadius = 14
         web.layer?.masksToBounds = true
@@ -597,6 +625,8 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             editor.seek(body["t"] as? Double ?? 0)
         case "editStop":
             editor.stop()
+        case "ytWarm":
+            overlay.warm(body["videoId"] as? String ?? "")
         case "ytInfo":
             ytInfo(url: body["url"] as? String ?? "", videoId: body["videoId"] as? String ?? "")
         case "finish":

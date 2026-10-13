@@ -1144,6 +1144,10 @@ document.addEventListener("keydown", (e) => {
 /* ════════════════ 시트 공통 ════════════════ */
 let sheetRender = null;
 function openSheet(title, render) {
+  if (render === renderAlarms && NATIVE) {   // 유튜브 알람을 바로 틀 수 있게 미리 불러 두기
+    const pick = state.alarms.find((a) => a.kind === "yt" && "a:" + a.id === state.settings.alarmPick) || state.alarms.find((a) => a.kind === "yt");
+    if (pick) post("ytWarm", { videoId: pick.videoId });
+  }
   $("#sheetTitle").textContent = title;
   $("#sheetExtra").innerHTML = "";
   sheetRender = render;
