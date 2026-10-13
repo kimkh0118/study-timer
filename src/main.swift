@@ -380,7 +380,7 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
         let control = """
         (function(){
           if (window.__ct) return; window.__ct = true;
-          var START=\(yt.start), VOL=\(Double(yt.volume) / 100.0), sent=false, tries=0, kicks=0, clicks=0, lastClick=-99, errTicks=0;
+          var START=\(yt.start), VOL=\(Double(yt.volume) / 100.0), sent=false, tries=0, kicks=0, clicks=0, lastClick=-99, errTicks=0, held=false, since=0;
           function send(m){ try{ webkit.messageHandlers.yt.postMessage(m); }catch(e){} }
           function mp(){ var p=document.getElementById('movie_player'); return (p && typeof p.playVideo==='function') ? p : null; }
           function vid(){ return document.querySelector('video'); }
@@ -395,11 +395,11 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
           }
           window.__ctVol = function(v){ VOL = v; applyVol(); };
           window.__ctTime = function(){ var p=mp(); try { if (p) return p.getCurrentTime(); } catch(e){} var x=vid(); return x ? x.currentTime : -1; };
-          window.__ctPause = function(){ var p=mp(); try { if (p) { p.pauseVideo(); return; } } catch(e){} var x=vid(); if (x) x.pause(); };
+          window.__ctPause = function(){ held = true; var p=mp(); try { if (p) { p.pauseVideo(); return; } } catch(e){} var x=vid(); if (x) x.pause(); };
           function kick(){
             var p=mp(); if (!p) return;
             kicks++;
-            try { applyVol(); if (START > 0 && p.getCurrentTime() < START - 1) p.seekTo(START, true); p.playVideo(); } catch(e){}
+            try { if (START > 0 && p.getCurrentTime() < START - 1) p.seekTo(START, true); p.playVideo(); } catch(e){}
           }
           // 그래도 큰 재생 버튼이 떠 있으면 Mac 쪽에 그 자리를 실제로 눌러 달라고 해요(버튼이 보일 때만).
           function askClick(){
@@ -424,7 +424,13 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
           // 끝나면 정해 둔 지점부터 다시
           setInterval(function(){
             var p=mp(); if (!sent || !p) return;
-            try { if (p.getPlayerState() === 0) { p.seekTo(START, true); p.playVideo(); } } catch(e){}
+            try {
+              var st = p.getPlayerState();
+              if (st === 0) { p.seekTo(START, true); p.playVideo(); }
+              // 소리를 켜는 순간 유튜브가 멈춰 버리면 처음 몇 초 동안은 다시 틀어요
+              else if (st === 2 && !held && since < 12) { p.playVideo(); }
+              if (since < 12) { since++; applyVol(); }
+            } catch(e){}
           }, 500);
         })();
         """
@@ -439,6 +445,7 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
         var comps = URLComponents(string: "https://www.youtube.com/embed/\(yt.videoId)")!
         comps.queryItems = [
             URLQueryItem(name: "autoplay", value: "1"),
+            URLQueryItem(name: "mute", value: "1"),        // 소리 없는 자동 재생은 유튜브가 항상 허용해요 → 시작되면 바로 소리 켜기
             URLQueryItem(name: "start", value: String(yt.start)),
             URLQueryItem(name: "playsinline", value: "1"),
             URLQueryItem(name: "rel", value: "0"),
