@@ -51,5 +51,5 @@ for k in range(bars*8):
 for d,g in ((0.137,0.25),(0.211,0.2),(0.293,0.15),(0.377,0.1)):
     sh=int(d*SR); out+=np.roll(out,sh,axis=0)*g*0.6
 out=np.tanh(out*1.1); out/=np.abs(out).max()/0.85
-wavfile.write("loop.wav",SR,(out*32767).astype(np.int16))
+wavfile.write("/tmp/loop.wav",SR,(out*32767).astype(np.int16))
 print(L/SR)

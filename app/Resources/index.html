@@ -362,6 +362,13 @@
   .tiles-head .vol svg { width: 16px; height: 16px; }
   .tiles-head .vol input { width: 140px; accent-color: #fff; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 14px; }
+  #musicList { grid-template-columns: repeat(3, 1fr); }
+  #musicList .thumb { aspect-ratio: 5 / 2; }
+  .tiles.small { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
+  .tiles.small .thumb { aspect-ratio: 2 / 1; }
+  .tiles.small .t-title { font-size: 13px; }
+  .snd-group { margin: 18px 4px 10px; font-size: 12px; font-weight: 700; letter-spacing: .02em; color: var(--dim); }
+  .tiles-head + .snd-group { margin-top: 4px; }
   .tile {
     position: relative; padding: 8px 8px 12px; border-radius: 20px; cursor: pointer;
     background: rgba(255,255,255,.04);
@@ -413,16 +420,19 @@
 
   /* ───────── 간소화 ───────── */
   .mini { display: none; }
-  .app.compact > :not(.mini):not(.toast):not(.alert):not(.bg-blur):not(.dim) { display: none !important; }
+  /* 간소화 창에서는 크게 흐린 배경을 끄고 가벼운 배경을 써요(창을 옮길 때 검게 변하던 문제) */
+  .app.compact > :not(.mini):not(.toast):not(.alert) { display: none !important; }
+  .app.compact { background: linear-gradient(120deg, #23232a, #0e0e12); }
   .app.compact { grid-template-columns: 1fr; }
   .app.compact .mini {
     display: grid; grid-template-columns: auto 1fr; height: 100vh; width: 100vw; position: relative; z-index: 1;
     animation: miniIn .45s cubic-bezier(.16,.84,.24,1);
   }
-  @keyframes miniIn { from { opacity: 0; transform: scale(1.03); filter: blur(6px); } }
+  @keyframes miniIn { from { opacity: 0; transform: scale(1.03); } }
   .mini-art { height: 100vh; aspect-ratio: 1 / 1; overflow: hidden; }
   .mini-art img { width: 100%; height: 100%; object-fit: cover; display: block;
-    -webkit-mask-image: linear-gradient(to right, #000 70%, transparent); mask-image: linear-gradient(to right, #000 70%, transparent); }
+    -webkit-mask-image: linear-gradient(to right, #000 70%, transparent); mask-image: linear-gradient(to right, #000 70%, transparent);
+    transform: translateZ(0); }
   .mini-body { min-width: 0; display: flex; flex-direction: column; justify-content: center; padding: 14px 16px 14px 4px; }
   .mini-sub { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--dim); white-space: nowrap; overflow: hidden; }
   .mini-sub > span:last-child { overflow: hidden; text-overflow: ellipsis; }
@@ -670,7 +680,7 @@ function defaults() {
       goalMin: 240, timerMin: 50,
       focusMin: 25, breakMin: 5, longBreakMin: 15, longEvery: 4,
       sound: true, onTop: false, dim: 0.15,
-      overlay: true, alarmMode: "single", alarmPick: "sys:Glass", volume: 0.8, maxSec: 30,
+      overlay: true, alarmMode: "single", alarmPick: "b:morning", alarmSet: [], volume: 0.8, maxSec: 30,
       mode: "timer", subject: subjects[0].id,
     },
     wallpapers: [],
@@ -698,7 +708,11 @@ function migrate(raw) {
     else if (raw.settings.sound === false) s.settings.alarmPick = "none";     // 예전 "소리 끄기" 설정 이어받기
   }
   delete s.settings.focusSound; delete s.settings.breakSound;
-  if (s.settings.alarmPick.startsWith("a:") && !s.alarms.some((a) => "a:" + a.id === s.settings.alarmPick)) s.settings.alarmPick = "sys:Glass";
+  // v1.8: 유튜브·내 파일 알람은 없애고 앱에 들어 있는 소리로 통일
+  if (!Array.isArray(s.settings.alarmSet)) s.settings.alarmSet = [];
+  if (s.settings.alarmPick !== "none" && !/^(b|sys):[A-Za-z]+$/.test(s.settings.alarmPick)) s.settings.alarmPick = "b:morning";
+  s.settings.alarmSet = s.settings.alarmSet.filter((k) => /^(b|sys):[A-Za-z]+$/.test(k));
+  s.alarms = [];
   if (!Array.isArray(s.subjects) || !s.subjects.length) s.subjects = base.subjects;
   const users = (Array.isArray(raw.wallpapers) ? raw.wallpapers : []).filter((w) => w && w.kind === "user");
   s.wallpapers = [...BUILTIN, ...users];
@@ -867,31 +881,34 @@ function scheduleAlarm() {
   if (run && run.startedAt && run.target != null) post("alarm", { at: run.startedAt + (run.target - run.before) * 1000 });
 }
 /* ════════════════ 끝났을 때 알림 (맨 위 알림 창 + 노래) ════════════════ */
-const SYSTEM_SOUNDS = ["Glass", "Hero", "Ping", "Purr", "Submarine", "Funk", "Blow", "Bottle", "Frog", "Morse", "Pop", "Sosumi", "Tink", "Basso"];
-
-/* 알람 하나 → Mac에 보낼 재생 정보 */
-function alarmSpec(a) {
-  if (!a) return { type: "system", name: "Glass" };
-  if (a.kind === "yt") return { type: "youtube", videoId: a.videoId, start: a.start || 0, title: a.title };
-  return { type: "file", file: a.file, start: a.start || 0, title: a.title };
-}
-/* "sys:Glass" | "a:<id>" | "none" */
+/* 앱에 들어 있는 소리 (음악은 이 앱용으로 직접 만든 곡, 효과음은 Mac 기본 소리) */
+const SOUNDS = [
+  { key: "b:morning",  kind: "music", title: "아침 햇살", sub: "마림바", hue: 32,  spec: { type: "bundle", name: "morning.caf",  title: "아침 햇살" } },
+  { key: "b:piano",    kind: "music", title: "잔잔한 피아노", sub: "피아노", hue: 220, spec: { type: "bundle", name: "piano.caf",    title: "잔잔한 피아노" } },
+  { key: "b:musicbox", kind: "music", title: "오르골", sub: "오르골", hue: 300, spec: { type: "bundle", name: "musicbox.caf", title: "오르골" } },
+  { key: "b:wakeup",   kind: "music", title: "상쾌한 기상", sub: "비트", hue: 150, spec: { type: "bundle", name: "wakeup.caf",   title: "상쾌한 기상" } },
+  { key: "b:bells",    kind: "music", title: "종소리", sub: "종", hue: 50,  spec: { type: "bundle", name: "bells.caf",    title: "종소리" } },
+  { key: "b:digital",  kind: "music", title: "디지털 알람", sub: "삐삐", hue: 0,   spec: { type: "bundle", name: "digital.caf",  title: "디지털 알람" } },
+  ...["Glass", "Hero", "Ping", "Purr", "Submarine", "Funk", "Blow", "Bottle", "Frog", "Morse", "Pop", "Sosumi", "Tink", "Basso"]
+    .map((n) => ({ key: "sys:" + n, kind: "sfx", title: n, spec: { type: "system", name: n, title: n } })),
+];
+const DEFAULT_SOUND = "b:morning";
+const soundByKey = (k) => SOUNDS.find((x) => x.key === k);
+const isPickedKey = (k) => state.settings.alarmMode === "random" ? state.settings.alarmSet.includes(k) : state.settings.alarmPick === k;
 function specForPick(pick) {
-  if (!pick || pick === "none") return { type: "none" };
-  if (pick.startsWith("a:")) return alarmSpec(state.alarms.find((a) => "a:" + a.id === pick));
-  return { type: "system", name: pick.slice(4) || "Glass" };
+  if (pick === "none") return { type: "none" };
+  return (soundByKey(pick) || soundByKey(DEFAULT_SOUND)).spec;
 }
-/* 설정에 따라 이번에 울릴 알람 고르기 (랜덤이면 직전 곡은 되도록 피해요) */
-let lastAlarmId = null;
+/* 설정에 따라 이번에 울릴 소리 고르기 (랜덤이면 직전 소리는 되도록 피해요) */
+let lastAlarmKey = null;
 function chooseAlarm() {
   const s = state.settings;
   if (s.alarmMode === "random") {
-    let pool = state.alarms.filter((a) => a.use);
-    if (!pool.length) return { type: "system", name: "Glass" };
-    if (pool.length > 1) pool = pool.filter((a) => a.id !== lastAlarmId);
-    const a = pool[Math.floor(Math.random() * pool.length)];
-    lastAlarmId = a.id;
-    return alarmSpec(a);
+    let pool = s.alarmSet.filter(soundByKey);
+    if (!pool.length) return specForPick(DEFAULT_SOUND);
+    if (pool.length > 1) pool = pool.filter((k) => k !== lastAlarmKey);
+    lastAlarmKey = pool[Math.floor(Math.random() * pool.length)];
+    return specForPick(lastAlarmKey);
   }
   return specForPick(s.alarmPick);
 }
@@ -1144,10 +1161,6 @@ document.addEventListener("keydown", (e) => {
 /* ════════════════ 시트 공통 ════════════════ */
 let sheetRender = null;
 function openSheet(title, render) {
-  if (render === renderAlarms && NATIVE) {   // 유튜브 알람을 바로 틀 수 있게 미리 불러 두기
-    const pick = state.alarms.find((a) => a.kind === "yt" && "a:" + a.id === state.settings.alarmPick) || state.alarms.find((a) => a.kind === "yt");
-    if (pick) post("ytWarm", { videoId: pick.videoId });
-  }
   $("#sheetTitle").textContent = title;
   $("#sheetExtra").innerHTML = "";
   sheetRender = render;
@@ -1397,61 +1410,22 @@ const NOTE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 
 function alarmSummary() {
   const s = state.settings;
-  if (s.alarmMode === "random") {
-    const n = state.alarms.filter((a) => a.use).length;
-    return n ? `랜덤 ${n}곡` : "랜덤 (고른 곡 없음)";
-  }
+  if (s.alarmMode === "random") return s.alarmSet.length ? `랜덤 ${s.alarmSet.length}개` : "랜덤 (고른 소리 없음)";
   if (s.alarmPick === "none") return "소리 없음";
-  const a = s.alarmPick.startsWith("a:") && state.alarms.find((x) => "a:" + x.id === s.alarmPick);
-  return a ? a.title : "기본 알림음";
+  return (soundByKey(s.alarmPick) || soundByKey(DEFAULT_SOUND)).title;
 }
 
-/* ════════════════ 알람 ════════════════ */
+/* ════════════════ 알람: 앱에 들어 있는 소리만 써요 ════════════════ */
 $("#openAlarms").onclick = () => openSheet("알람", renderAlarms);
 
-const LINK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>';
 const BELL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
-const EDIT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>';
 const CHECK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
-let alarmQuery = "";
-let previewing = null;      // 유튜브·기본음 미리 듣기 중인 id
-let listening = null;       // 아래 재생 막대에 올린 파일 알람 id
-let editPos = { t: 0, playing: false, duration: 0 };
-let scrubbing = false;
-let ytDraft = null;         // { videoId, start, title, status }
-
-/* 유튜브 링크 → 영상 id, 시작 시각(t=) */
-function parseYouTube(text) {
-  const s = String(text || "").trim();
-  if (!s) return null;
-  let u;
-  try { u = new URL(/^https?:\/\//.test(s) ? s : "https://" + s); } catch (e) { return null; }
-  const host = u.hostname.replace(/^(www|m|music)\./, "");
-  let id = null;
-  if (host === "youtu.be") id = u.pathname.split("/")[1];
-  else if (host.endsWith("youtube.com") || host.endsWith("youtube-nocookie.com")) {
-    id = u.searchParams.get("v");
-    const m = u.pathname.match(/^\/(shorts|embed|live|v)\/([^/?#]+)/);
-    if (!id && m) id = m[2];
-  }
-  if (!id || !/^[A-Za-z0-9_-]{11}$/.test(id)) return null;
-  const st = parseTime(u.searchParams.get("t") || u.searchParams.get("start") || "");
-  return { videoId: id, start: Number.isNaN(st) ? 0 : st };
-}
-/* "1:35", "95", "95s", "1m35s" → 초 */
-function parseTime(v) {
-  v = String(v || "").trim();
-  if (!v) return 0;
-  if (/^\d+$/.test(v)) return Number(v);
-  if (/^\d+:\d{1,2}(:\d{1,2})?$/.test(v)) return v.split(":").map(Number).reduce((a, b) => a * 60 + b, 0);
-  const m = v.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/);
-  return m ? (Number(m[1] || 0) * 3600 + Number(m[2] || 0) * 60 + Number(m[3] || 0)) : NaN;
-}
-const ytThumb = (id) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
-const hueOf = (s) => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
-
-const isPicked = (a) => state.settings.alarmMode === "random" ? !!a.use : state.settings.alarmPick === "a:" + a.id;
+let previewing = null;                         // 지금 미리 듣는 소리 키
+let previewTimer = null;
+const listening = null;                        // (예전 파일 알람용, 이제 안 써요)
+const editPos = { playing: false };
+function closeNowbar() {}
 
 function renderAlarms() {
   const s = state.settings;
@@ -1461,302 +1435,77 @@ function renderAlarms() {
       <button role="tab" data-amode="random" aria-selected="${s.alarmMode === "random"}">랜덤</button>
     </div>`;
   $("#sheetBody").innerHTML = `
-    <form class="paste" id="ytForm" autocomplete="off">
-      <span class="paste-ic" aria-hidden="true">${LINK_ICON}</span>
-      <input id="ytUrl" placeholder="유튜브 링크 붙여넣기" aria-label="유튜브 링크">
-      <button class="soft" type="submit" id="ytAdd" disabled>추가</button>
-      ${NATIVE ? `<span class="paste-sep" aria-hidden="true"></span><button class="soft" type="button" data-addfile>파일</button>` : ""}
-    </form>
-    <div class="yt-hint" id="ytHint"></div>
     <div class="tiles-head">
       <span class="hint num" id="pickCount"></span>
       <label class="vol" title="소리 크기">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
-        <input type="range" id="alarmVol" min="0" max="1" step="0.05" value="${state.settings.volume}" aria-label="소리 크기">
+        <input type="range" id="alarmVol" min="0" max="1" step="0.05" value="${s.volume}" aria-label="소리 크기">
       </label>
-      ${state.alarms.length > 5 ? `<input class="field search" id="alarmSearch" type="search" placeholder="검색" value="${esc(alarmQuery)}" aria-label="알람 검색">` : ""}
     </div>
-    <div class="tiles" id="alarmList"></div>
-    <div class="nowbar glass" id="nowbar" hidden></div>`;
+    <div class="snd-group">음악</div>
+    <div class="tiles" id="musicList"></div>
+    <div class="snd-group">효과음</div>
+    <div class="tiles small" id="sfxList"></div>`;
   renderAlarmList();
-  renderNowbar();
+}
+
+function soundTile(x) {
+  const sel = isPickedKey(x.key);
+  const on = previewing === x.key;
+  const art = x.hue != null
+    ? `<span class="art-ph" style="--h:${x.hue}">${NOTE_ICON}</span>`
+    : `<span class="art-ph sys">${BELL_ICON}</span>`;
+  return `<div class="tile ${sel ? "sel" : ""} ${on ? "on" : ""}" data-tile="${x.key}" role="button" tabindex="0" aria-pressed="${sel}" aria-label="${esc(x.title)}">
+    <div class="thumb">${art}
+      <button class="t-play" data-play="${x.key}" aria-label="${esc(x.title)} ${on ? "멈추기" : "듣기"}">${on ? PAUSE_ICON : PLAY_ICON}</button>
+      <span class="t-check" aria-hidden="true">${CHECK_ICON}</span>
+    </div>
+    <div class="t-title">${esc(x.title)}</div>
+    ${x.sub ? `<div class="t-meta">${esc(x.sub)}</div>` : ""}
+  </div>`;
 }
 
 function renderAlarmList() {
+  if (!$("#musicList")) return;
   const s = state.settings;
-  const single = s.alarmMode === "single";
-  const q = alarmQuery.trim().toLowerCase();
-  const list = state.alarms.filter((a) => !q || a.title.toLowerCase().includes(q));
-  const n = state.alarms.filter((a) => a.use).length;
-  $("#pickCount").textContent = single ? "" : n ? `${n}곡 중 랜덤` : "고른 곡이 없으면 기본 알림음";
-
-  const sysTile = single && !q ? `
-    <div class="tile ${s.alarmPick.startsWith("sys:") || s.alarmPick === "none" ? "sel" : ""} ${previewing === "sys" ? "on" : ""}" data-tile="sys" role="button" tabindex="0" aria-label="기본 알림음">
-      <div class="thumb"><span class="art-ph sys">${BELL_ICON}</span>
-        <button class="t-play" data-play="sys" aria-label="기본 알림음 듣기">${PLAY_ICON}</button>
-        <span class="t-check" aria-hidden="true">${CHECK_ICON}</span>
-      </div>
-      <div class="t-title">기본 알림음</div>
-      <div class="t-meta">Mac</div>
-    </div>` : "";
-
-  const tiles = list.map((a) => {
-    const sel = isPicked(a);
-    const playing = (previewing === a.id) || (listening === a.id && editPos.playing);
-    return `<div class="tile ${sel ? "sel" : ""} ${playing || listening === a.id ? "on" : ""}" data-tile="${a.id}" role="button" tabindex="0" aria-pressed="${sel}" aria-label="${esc(a.title)}">
-      <div class="thumb">
-        ${a.kind === "yt" ? `<img src="${ytThumb(a.videoId)}" alt="" loading="lazy">` : `<span class="art-ph" style="--h:${hueOf(a.title)}">${NOTE_ICON}</span>`}
-        <button class="t-play" data-play="${a.id}" aria-label="${esc(a.title)} ${playing ? "멈추기" : "듣기"}">${playing ? PAUSE_ICON : PLAY_ICON}</button>
-        <button class="t-edit" data-aren="${a.id}" aria-label="${esc(a.title)} 이름 바꾸기">${EDIT_ICON}</button>
-        <button class="t-del" data-adel="${a.id}" aria-label="${esc(a.title)} 지우기">${X_ICON}</button>
-        <span class="t-check" aria-hidden="true">${CHECK_ICON}</span>
-      </div>
-      <div class="t-title" data-title="${a.id}">${esc(a.title)}</div>
-      <div class="t-meta num">${a.kind === "yt" ? "YouTube" : fmtClock(a.duration || 0)}${a.start ? ` · ${fmtClock(a.start)}부터` : ""}</div>
-    </div>`;
-  }).join("");
-
-  $("#alarmList").innerHTML = sysTile + tiles ||
-    `<div class="empty-alarm">${q ? "결과 없음" : "링크를 붙여넣거나 파일을 추가하세요"}</div>`;
+  const n = s.alarmSet.length;
+  $("#pickCount").textContent = s.alarmMode === "single" ? "" : n ? `${n}개 중 랜덤` : "고른 소리가 없으면 아침 햇살";
+  $("#musicList").innerHTML = SOUNDS.filter((x) => x.kind === "music").map(soundTile).join("");
+  $("#sfxList").innerHTML = SOUNDS.filter((x) => x.kind === "sfx").map(soundTile).join("");
 }
-
-/* ── 아래 재생 막대 (파일 알람을 들으며 시작 지점 정하기) ── */
-function renderNowbar() {
-  const bar = $("#nowbar");
-  if (!bar) return;
-  const a = state.alarms.find((x) => x.id === listening);
-  if (!a) { bar.hidden = true; bar.innerHTML = ""; return; }
-  const d = a.duration || editPos.duration || 1;
-  bar.hidden = false;
-  bar.innerHTML = `
-    <button class="soft play big" data-eplay aria-label="${editPos.playing ? "멈추기" : "재생"}">${editPos.playing ? PAUSE_ICON : PLAY_ICON}</button>
-    <div class="now-title">${esc(a.title)}</div>
-    <div class="scrub" style="--start:${((a.start || 0) / d) * 100}%">
-      <input type="range" id="escrub" min="0" max="${d.toFixed(1)}" step="0.1" value="${editPos.t.toFixed(1)}" aria-label="재생 위치">
-      <i class="start-mark" aria-hidden="true"></i>
-    </div>
-    <span class="num etime" id="etime">${fmtClock(editPos.t)} / ${fmtClock(d)}</span>
-    <button class="btn primary sm" data-esetstart>여기서 시작</button>
-    <button class="x close" data-nowclose aria-label="닫기" style="width:28px;height:28px">${X_ICON}</button>`;
-}
-function closeNowbar() {
-  if (!listening) return;
-  listening = null;
-  editPos.playing = false;
-  post("editStop");
-  renderNowbar();
-}
-window.__editPos = (p) => {
-  const wasPlaying = editPos.playing;
-  editPos = { t: p.t, playing: p.playing, duration: p.duration || editPos.duration };
-  if (sheetRender !== renderAlarms || !$("#nowbar") || $("#nowbar").hidden) return;
-  if (!scrubbing) $("#escrub").value = p.t.toFixed(1);
-  $("#etime").textContent = `${fmtClock(p.t)} / ${fmtClock(editPos.duration)}`;
-  const btn = $("#nowbar [data-eplay]");
-  btn.innerHTML = p.playing ? PAUSE_ICON : PLAY_ICON;
-  btn.setAttribute("aria-label", p.playing ? "멈추기" : "재생");
-  if (wasPlaying !== p.playing) renderAlarmList();
-};
 
 function stopPreview() {
+  clearTimeout(previewTimer);
   if (!previewing) return;
   previewing = null;
   post("stopSound");
 }
 window.__previewClosed = () => { previewing = null; if (sheetRender === renderAlarms) renderAlarmList(); };
-window.__startPicked = ({ id, sec }) => {
-  const a = state.alarms.find((x) => x.id === id);
-  if (!a) return;
-  a.start = Math.max(0, Math.round(sec));
-  save();
-  if (sheetRender === renderAlarms) renderAlarmList();
-  toast(`${fmtClock(a.start)}부터`);
-};
 
-/* ▶ 듣기: 유튜브는 맨 위 미리 듣기 창(여기서 시작 버튼 포함), 파일은 아래 재생 막대 */
-function listen(id) {
-  if (volPreview) { clearTimeout(volTimer); volPreview = false; save(); }   // 맞추기용 음악은 Mac 쪽에서 바로 꺼져요
-  if (id === "sys") {
-    closeNowbar();
-    if (previewing === "sys") { stopPreview(); renderAlarmList(); return; }
-    stopPreview();
-    previewing = "sys";
-    if (NATIVE) post("previewSound", { sound: { type: "system", name: "Glass" }, volume: state.settings.volume });
-    else chime();
-    setTimeout(() => { if (previewing === "sys") { previewing = null; if (sheetRender === renderAlarms) renderAlarmList(); } }, 2500);
-    renderAlarmList();
-    return;
-  }
-  const a = state.alarms.find((x) => x.id === id);
-  if (!a) return;
-  if (a.kind === "yt") {
-    closeNowbar();
-    if (previewing === a.id) { stopPreview(); renderAlarmList(); return; }
-    stopPreview();
-    previewing = a.id;
-    if (NATIVE) post("previewSound", { sound: alarmSpec(a), volume: state.settings.volume, alarmId: a.id });
-    else window.open(`https://www.youtube.com/watch?v=${a.videoId}&t=${a.start || 0}s`, "_blank");
-    renderAlarmList();
-    return;
-  }
+function listen(key) {
+  const x = soundByKey(key);
+  if (!x) return;
+  if (volPreview) { clearTimeout(volTimer); volPreview = false; post("volPreviewStop"); save(); }
+  if (previewing === key) { stopPreview(); renderAlarmList(); return; }
   stopPreview();
-  if (listening === a.id) {
-    if (editPos.playing) post("editPause");
-    else post("editPlay", { file: a.file, t: Number($("#escrub").value), volume: state.settings.volume });
-    return;
-  }
-  closeNowbar();
-  listening = a.id;
-  editPos = { t: a.start || 0, playing: false, duration: a.duration || 0 };
-  renderNowbar();
+  previewing = key;
+  if (NATIVE) post("previewSound", { sound: x.spec, volume: state.settings.volume, loop: x.kind === "music" });
+  else chime();
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(() => { if (previewing === key) { stopPreview(); if (sheetRender === renderAlarms) renderAlarmList(); } },
+    x.kind === "music" ? 20000 : 2500);
   renderAlarmList();
-  if (NATIVE) post("editPlay", { file: a.file, t: a.start || 0, volume: state.settings.volume });
-  else toast("Mac 앱에서 들을 수 있어요");
 }
 
-function selectTile(id) {
+function selectTile(key) {
   const s = state.settings;
-  if (id === "sys") { s.alarmMode = "single"; s.alarmPick = "sys:Glass"; }
-  else if (s.alarmMode === "random") { const a = state.alarms.find((x) => x.id === id); a.use = !a.use; }
-  else s.alarmPick = "a:" + id;
+  if (s.alarmMode === "random") {
+    s.alarmSet = s.alarmSet.includes(key) ? s.alarmSet.filter((k) => k !== key) : [...s.alarmSet, key];
+  } else s.alarmPick = key;
   save();
-  // 다시 그리지 않고 표시만 바꿔요(두 번 눌러 이름 바꾸기가 끊기지 않게).
-  $$("#alarmList [data-tile]").forEach((el) => {
-    const tid = el.dataset.tile;
-    const a = state.alarms.find((x) => x.id === tid);
-    const sel = tid === "sys" ? s.alarmMode === "single" && (s.alarmPick.startsWith("sys:") || s.alarmPick === "none") : isPicked(a);
-    el.classList.toggle("sel", sel);
-    el.setAttribute("aria-pressed", String(sel));
-  });
-  const n = state.alarms.filter((a) => a.use).length;
-  $("#pickCount").textContent = s.alarmMode === "single" ? "" : n ? `${n}곡 중 랜덤` : "고른 곡이 없으면 기본 알림음";
-}
-
-function removeAlarm(id) {
-  const a = state.alarms.find((x) => x.id === id);
-  if (!a) return;
-  if (previewing === id) stopPreview();
-  if (listening === id) closeNowbar();
-  state.alarms = state.alarms.filter((x) => x.id !== id);
-  if (state.settings.alarmPick === "a:" + id) state.settings.alarmPick = "sys:Glass";
-  if (a.kind === "file") post("deleteSound", { name: a.file });
-  writeNow();
-  renderAlarms();
-  toast("지웠어요");
-}
-
-/* 제목 두 번 눌러 바꾸기 */
-function startRename(el) {
-  const a = state.alarms.find((x) => x.id === el.dataset.title);
-  if (!a || el.querySelector("input")) return;
-  el.innerHTML = `<input class="t-rename" value="${esc(a.title)}" maxlength="40" aria-label="알람 제목">`;
-  const inp = el.querySelector("input");
-  inp.focus(); inp.select();
-  const done = (keep) => {
-    const v = inp.value.trim();
-    if (keep && v) { a.title = v.slice(0, 40); save(); }
-    renderAlarmList();
-  };
-  inp.addEventListener("keydown", (e) => { if (e.key === "Enter") done(true); if (e.key === "Escape") { e.stopPropagation(); done(false); } });
-  inp.addEventListener("blur", () => done(true), { once: true });
-}
-
-/* 링크를 붙여넣으면 영상 확인하고 제목 가져오기 */
-let ytTimer;
-function onYtInput() {
-  const parsed = parseYouTube($("#ytUrl").value);
-  const hint = $("#ytHint");
-  hint.classList.remove("bad");
-  $("#ytAdd").disabled = !parsed;
-  if (!$("#ytUrl").value.trim()) { ytDraft = null; hint.textContent = ""; return; }
-  if (!parsed) { ytDraft = null; hint.classList.add("bad"); hint.textContent = "유튜브 링크가 아니에요"; return; }
-  if (ytDraft && ytDraft.videoId === parsed.videoId) return;
-  ytDraft = { ...parsed, title: "", status: 0 };
-  hint.innerHTML = `<img src="${ytThumb(parsed.videoId)}" alt=""><span>확인 중…</span>`;
-  clearTimeout(ytTimer);
-  ytTimer = setTimeout(() => {
-    if (NATIVE) post("ytInfo", { url: `https://www.youtube.com/watch?v=${parsed.videoId}`, videoId: parsed.videoId });
-    else window.__ytInfo({ videoId: parsed.videoId, status: 200, title: "" });
-  }, 200);
-}
-let autoAdd = false;      // 붙여넣기로 들어온 링크는 확인되는 대로 바로 추가
-window.__ytInfo = (info) => {
-  if (!ytDraft || info.videoId !== ytDraft.videoId || sheetRender !== renderAlarms) return;
-  ytDraft.status = info.status;
-  ytDraft.title = info.title || "";
-  const hint = $("#ytHint");
-  const img = `<img src="${ytThumb(ytDraft.videoId)}" alt="">`;
-  if (info.status === 200) hint.innerHTML = `${img}<span>${esc(info.title || "YouTube 영상")}</span>`;
-  else if (info.status === 401 || info.status === 403) { hint.classList.add("bad"); hint.innerHTML = `${img}<span>재생이 막힌 영상이에요. 같은 곡의 가사·Topic 영상을 써 보세요</span>`; }
-  else if (info.status === 404 || info.status === 400) { hint.classList.add("bad"); hint.innerHTML = `${img}<span>영상을 찾을 수 없어요</span>`; }
-  else hint.innerHTML = `${img}<span>YouTube 영상</span>`;
-  if (autoAdd) {
-    autoAdd = false;
-    if (info.status !== 401 && info.status !== 403 && info.status !== 404 && info.status !== 400) addFromLink();
-  }
-};
-
-function addFromLink() {
-  const parsed = parseYouTube($("#ytUrl").value);
-  if (!parsed) { onYtInput(); $("#ytUrl").focus(); return; }
-  if (ytDraft && (ytDraft.status === 401 || ytDraft.status === 403)) { toast("재생이 막힌 영상이에요"); return; }
-  const title = ((ytDraft && ytDraft.videoId === parsed.videoId && ytDraft.title) || "YouTube 영상").slice(0, 40);
-  const a = { id: uid(), kind: "yt", videoId: parsed.videoId, title, start: parsed.start || 0, use: true };
-  state.alarms.unshift(a);
-  if (state.settings.alarmMode === "single") state.settings.alarmPick = "a:" + a.id;
-  ytDraft = null;
-  writeNow();
-  $("#ytUrl").value = "";
-  $("#ytAdd").disabled = true;
-  $("#ytHint").textContent = "";
   renderAlarmList();
-  toast("추가했어요");
 }
 
-window.__soundsAdded = ({ added = [], failed = [] }) => {
-  let last = null;
-  for (const a of added) {
-    last = { id: uid(), kind: "file", file: a.file, title: a.label.slice(0, 40), duration: a.duration, start: 0, use: true };
-    state.alarms.unshift(last);
-  }
-  if (last && state.settings.alarmMode === "single") state.settings.alarmPick = "a:" + last.id;
-  writeNow();
-  if (sheetRender === renderAlarms) renderAlarms();
-  if (added.length) toast(`${added.length}곡 추가`);
-  if (failed.length) setTimeout(() => toast(`재생할 수 없는 파일 ${failed.length}개 제외`), added.length ? 2700 : 0);
-};
-
-/* ── 이벤트 ── */
-$("#sheetBody").addEventListener("input", (e) => {
-  if (sheetRender !== renderAlarms) return;
-  if (e.target.id === "ytUrl") onYtInput();
-  if (e.target.id === "alarmSearch") { alarmQuery = e.target.value; renderAlarmList(); }
-  if (e.target.id === "escrub") { scrubbing = true; $("#etime").textContent = `${fmtClock(Number(e.target.value))} / ${fmtClock(editPos.duration)}`; }
-});
-$("#sheetBody").addEventListener("change", (e) => {
-  if (sheetRender !== renderAlarms) return;
-  if (e.target.id === "escrub") { scrubbing = false; post("editSeek", { t: Number(e.target.value) }); }
-});
-$("#sheetBody").addEventListener("submit", (e) => {
-  if (e.target.id !== "ytForm") return;
-  e.preventDefault();
-  addFromLink();
-});
-$("#sheetBody").addEventListener("paste", (e) => {
-  if (sheetRender !== renderAlarms || e.target.id !== "ytUrl") return;
-  const text = (e.clipboardData || window.clipboardData).getData("text");
-  if (!parseYouTube(text)) return;
-  e.preventDefault();
-  e.target.value = text.trim();
-  autoAdd = true;
-  ytDraft = null;
-  onYtInput();
-});
-$("#sheetBody").addEventListener("dblclick", (e) => {
-  if (sheetRender !== renderAlarms) return;
-  const el = e.target.closest("[data-title]");
-  if (el) startRename(el);
-});
 $("#sheetBody").addEventListener("keydown", (e) => {
   if (sheetRender !== renderAlarms) return;
   const tile = e.target.closest("[data-tile]");
@@ -1764,28 +1513,9 @@ $("#sheetBody").addEventListener("keydown", (e) => {
 });
 $("#sheetBody").addEventListener("click", (e) => {
   if (sheetRender !== renderAlarms) return;
-  const b = e.target.closest("button");
-  if (b) {
-    const d = b.dataset;
-    if (d.addfile !== undefined) post("pickSounds");
-    else if (d.play) listen(d.play);
-    else if (d.adel) removeAlarm(d.adel);
-    else if (d.aren) { const el = $(`[data-title="${d.aren}"]`); if (el) startRename(el); }
-    else if (d.eplay !== undefined) listen(listening);
-    else if (d.nowclose !== undefined) { closeNowbar(); renderAlarmList(); }
-    else if (d.esetstart !== undefined) {
-      const a = state.alarms.find((x) => x.id === listening);
-      if (!a) return;
-      a.start = Math.max(0, Math.round(Number($("#escrub").value)));
-      save();
-      $("#nowbar .scrub").style.setProperty("--start", `${(a.start / (a.duration || editPos.duration || 1)) * 100}%`);
-      renderAlarmList();
-      toast(`${fmtClock(a.start)}부터`);
-    }
-    return;
-  }
+  const b = e.target.closest("button[data-play]");
+  if (b) { listen(b.dataset.play); return; }
   if (e.target.closest("input")) return;
-  if (e.target.closest(".t-title") && e.detail > 1) return;          // 두 번 누르기는 이름 바꾸기
   const tile = e.target.closest("[data-tile]");
   if (tile) selectTile(tile.dataset.tile);
 });
@@ -1793,7 +1523,6 @@ $("#sheetExtra").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-amode]");
   if (!b || sheetRender !== renderAlarms) return;
   state.settings.alarmMode = b.dataset.amode;
-  if (b.dataset.amode === "single" && !state.settings.alarmPick) state.settings.alarmPick = "sys:Glass";
   save();
   $$("#sheetExtra [data-amode]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
   renderAlarmList();
@@ -1871,24 +1600,12 @@ $("#pinTop").onclick = () => {
 
 /* ════════════════ 소리 크기: 지금 알람을 들으면서 조절 ════════════════ */
 let volPreview = false, volTimer = null;
-function currentAlarmSpec() {
-  const s = state.settings;
-  if (s.alarmMode === "random") {
-    const a = state.alarms.find((x) => x.use);
-    return a ? [alarmSpec(a), a.id] : [{ type: "system", name: "Glass" }, ""];
-  }
-  if (s.alarmPick.startsWith("a:")) {
-    const a = state.alarms.find((x) => "a:" + x.id === s.alarmPick);
-    if (a) return [alarmSpec(a), a.id];
-  }
-  return [specForPick(s.alarmPick === "none" ? "sys:Glass" : s.alarmPick), ""];
-}
 /* 소리 크기: 다른 소리가 안 나면 잔잔한 음악을 틀어 두고 맞춰요.
    노래를 듣는 중이거나 알림이 울리는 중이면 그 소리 크기만 바꿔요(멈추거나 닫지 않아요). */
 function onVolumeInput(v, released) {
   state.settings.volume = v;
   $$("[data-volume], #alarmVol").forEach((el) => { if (Number(el.value) !== v) el.value = v; });
-  const busy = (listening && editPos.playing) || (previewing && previewing !== "sys");
+  const busy = !!previewing;
   if (busy) {
     post("setVolume", { volume: v });
     if (released) save();

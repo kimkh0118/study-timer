@@ -71,7 +71,9 @@ final class SoundPlayer {
 
         var url: URL?
         if type == "file", let file = spec["file"] as? String, isSafeName(file) { url = soundDir.appendingPathComponent(file) }
-        if type == "bundle", let name = spec["name"] as? String { url = Bundle.main.url(forResource: name, withExtension: nil) }
+        if type == "bundle", let name = spec["name"] as? String, name.range(of: "^[a-z0-9-]+\\.caf$", options: .regularExpression) != nil {
+            url = Bundle.main.resourceURL?.appendingPathComponent("sounds").appendingPathComponent(name)
+        }
         if let u = url, let p = try? AVAudioPlayer(contentsOf: u) {
             p.numberOfLoops = loop ? -1 : 0
             let start = spec["start"] as? Double ?? 0
@@ -607,7 +609,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
                 return
             }
             if volSound.isPlaying { volSound.setVolume(v) }
-            else { volSound.play(["type": "bundle", "name": "volume-preview.caf"], loop: true, volume: v, maxSec: 0, fadeIn: false) }
+            else { volSound.play(["type": "bundle", "name": (body["name"] as? String) ?? "piano.caf"], loop: true, volume: v, maxSec: 0, fadeIn: false) }
         case "volPreviewStop":
             volSound.fadeOutAndStop(0.5)
         case "setVolume":
@@ -874,11 +876,12 @@ final class Bridge: NSObject, WKScriptMessageHandler {
 final class DragStrip: NSView {
     override var mouseDownCanMoveWindow: Bool { true }
     override func mouseDown(with event: NSEvent) {
-        if event.clickCount == 2 { window?.zoom(nil) } else { window?.performDrag(with: event) }
+        let compact = (window?.contentMinSize.width ?? 1000) < 500      // 간소화 창은 두 번 눌러도 커지지 않게
+        if event.clickCount == 2 { if !compact { window?.zoom(nil) } } else { window?.performDrag(with: event) }
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, NSWindowDelegate {
     var window: NSWindow!
     let bridge = Bridge()
     private var shown = false
@@ -927,7 +930,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
         window.isReleasedWhenClosed = false
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.backgroundColor = .black
+        window.backgroundColor = NSColor(red: 0.08, green: 0.08, blue: 0.1, alpha: 1)
+        window.delegate = self
         window.contentMinSize = NSSize(width: 1000, height: 680)
 
         let root = NSView(frame: window.contentRect(forFrameRect: window.frame))
@@ -944,6 +948,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
         bridge.window = window
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.reveal() }   // 혹시 늦어지면 그냥 띄우기
     }
+
+    /// 창을 옮기거나 다른 화면으로 넘어간 뒤 웹 화면을 다시 그려요(검은 화면 방지).
+    private func repaint() {
+        guard let web = bridge.web else { return }
+        web.needsDisplay = true
+        web.evaluateJavaScript("document.body.style.transform='translateZ(0)';requestAnimationFrame(function(){document.body.style.transform='';})")
+    }
+    func windowDidMove(_ notification: Notification) { repaint() }
+    func windowDidChangeScreen(_ notification: Notification) { repaint() }
+    func windowDidChangeBackingProperties(_ notification: Notification) { repaint() }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
