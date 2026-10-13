@@ -380,7 +380,7 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
         let control = """
         (function(){
           if (window.__ct) return; window.__ct = true;
-          var START=\(yt.start), VOL=\(Double(yt.volume) / 100.0), sent=false, tries=0, kicks=0, clicks=0, lastClick=-99;
+          var START=\(yt.start), VOL=\(Double(yt.volume) / 100.0), sent=false, tries=0, kicks=0, clicks=0, lastClick=-99, errTicks=0;
           function send(m){ try{ webkit.messageHandlers.yt.postMessage(m); }catch(e){} }
           function mp(){ var p=document.getElementById('movie_player'); return (p && typeof p.playVideo==='function') ? p : null; }
           function vid(){ return document.querySelector('video'); }
@@ -412,12 +412,14 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
           }
           var timer = setInterval(function(){
             tries++;
-            if (document.querySelector('.ytp-error')) { clearInterval(timer); send({error:'blocked'}); return; }
+            var er = document.querySelector('.ytp-error');
+            if (er && er.offsetParent && er.getBoundingClientRect().height > 20 && (er.textContent||'').trim().length > 0) { errTicks++; } else errTicks = 0;
+            if (errTicks >= 10) { clearInterval(timer); send({error:'blocked'}); return; }
             if (isPlaying()) { applyVol(); if (!sent) { sent = true; send({playing:true}); } clearInterval(timer); return; }
             if (tries % 3 === 1) kick();
             var st = -1; try { var q = mp(); if (q) st = q.getPlayerState(); } catch(e){}
-            if (st !== 3 && tries >= 2 && clicks < 3 && tries - lastClick >= 10 && askClick()) { clicks++; lastClick = tries; }
-            if (tries > 150) { clearInterval(timer); send({error:'timeout'}); }
+            if ((st === -1 || st === 5 || st === 2) && tries >= 5 && clicks < 3 && tries - lastClick >= 15 && askClick()) { clicks++; lastClick = tries; }
+            if (tries > 200) { clearInterval(timer); send({error:'timeout'}); }
           }, 100);
           // 끝나면 정해 둔 지점부터 다시
           setInterval(function(){
@@ -539,7 +541,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         }
         // 영상이 막혔거나 인터넷이 끊기면 기본 소리로 대신 울려요.
         overlay.onYouTubeFailed = { [weak self] in
-            guard let self = self else { return }
+            guard let self = self, !self.overlay.isPreview else { return }   // 미리 듣기에선 벨소리로 대신하지 않아요
             self.sound.play(["type": "system", "name": "Glass"], loop: !self.overlay.isPreview,
                             volume: self.fallbackVolume, maxSec: self.overlay.isPreview ? 3 : self.fallbackMaxSec)
         }
