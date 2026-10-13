@@ -196,6 +196,7 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
     private var player: WKWebView?
     private var pauseTimer: Timer?
     private(set) var isPreview = false
+    private var ytStarted = false
     var onAction: ((String) -> Void)?
     var onYouTubeFailed: (() -> Void)?
     var onYouTubePlaying: (() -> Void)?
@@ -246,6 +247,14 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
             let web = makePlayer(yt, frame: NSRect(x: 22, y: (H - vh) / 2, width: vw, height: vh))
             glass.addSubview(web)
             player = web
+            ytStarted = false
+            // 자동 재생이 막혀 있으면 플레이어 가운데를 한 번 눌러 줘요(이미 재생 중이면 안 눌러요).
+            for delay in [1.8, 3.6] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak web] in
+                    guard let self = self, let web = web, self.player === web, !self.ytStarted else { return }
+                    self.clickCenter(of: web)
+                }
+            }
             leftEdge = 22 + vw + 24
             if yt.maxSec > 0 {
                 let t = Timer(timeInterval: yt.maxSec, repeats: false) { [weak self] _ in
@@ -361,7 +370,7 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
             var x = v();
             if (document.querySelector('.ytp-error')) { clearInterval(timer); send({error:'blocked'}); return; }
             if (x) hook(x);
-            if (sent || tries > 60) { clearInterval(timer); if (!sent) send({error:'timeout'}); }
+            if (sent || tries > 75) { clearInterval(timer); if (!sent) send({error:'timeout'}); }
           }, 150);
         })();
         """
@@ -390,9 +399,23 @@ final class FinishOverlay: NSObject, WKScriptMessageHandler {
         player?.evaluateJavaScript("(function(){var x=document.querySelector('video'); if(x) x.volume=\(max(0, min(1, v)));})()")
     }
 
+    private func clickCenter(of web: WKWebView) {
+        guard let win = web.window else { return }
+        let pt = web.convert(NSPoint(x: web.bounds.midX, y: web.bounds.midY), to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            if let ev = NSEvent.mouseEvent(with: type, location: pt, modifierFlags: [],
+                                           timestamp: ProcessInfo.processInfo.systemUptime,
+                                           windowNumber: win.windowNumber, context: nil,
+                                           eventNumber: 0, clickCount: 1,
+                                           pressure: type == .leftMouseDown ? 1 : 0) {
+                win.sendEvent(ev)
+            }
+        }
+    }
+
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let m = message.body as? [String: Any] else { return }
-        if m["playing"] != nil { onYouTubePlaying?() }
+        if m["playing"] != nil { ytStarted = true; onYouTubePlaying?() }
         if m["error"] != nil { onYouTubeFailed?() }
     }
 
