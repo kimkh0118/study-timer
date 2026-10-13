@@ -120,14 +120,33 @@ final class AlertPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-final class FinishOverlay: NSObject {
-    private var panel: AlertPanel?
-    var onAction: ((String) -> Void)?
+/// 알림 창에서 틀 유튜브 영상
+struct YouTubeAlarm {
+    let videoId: String
+    let start: Int
+    let volume: Int      // 0~100
+    let maxSec: Double   // 0이면 확인 누를 때까지
+}
 
-    func show(title: String, body: String, image: NSImage?, actions: [[String: String]]) {
+final class FinishOverlay: NSObject, WKScriptMessageHandler {
+    private var panel: AlertPanel?
+    private var player: WKWebView?
+    private var pauseTimer: Timer?
+    private(set) var isPreview = false
+    var onAction: ((String) -> Void)?
+    var onYouTubeFailed: (() -> Void)?
+    var onYouTubePlaying: (() -> Void)?
+
+    func show(title: String, body: String, songTitle: String?, image: NSImage?,
+              youtube: YouTubeAlarm?, actions: [[String: String]], preview: Bool = false) {
         close()
+        isPreview = preview
         guard let screen = NSScreen.main else { return }
-        let W: CGFloat = 540, H: CGFloat = 172
+
+        // 유튜브 플레이어는 YouTube 규칙상 200×200 이상 보여야 해서 창을 크게 써요.
+        let hasVideo = youtube != nil
+        let W: CGFloat = hasVideo ? 724 : 540
+        let H: CGFloat = hasVideo ? 264 : 172
         let x = screen.frame.midX - W / 2
         let y = screen.visibleFrame.maxY - H - 18     // 메뉴 막대 바로 아래
 
@@ -155,52 +174,79 @@ final class FinishOverlay: NSObject {
         glass.layer?.borderColor = NSColor(white: 1, alpha: 0.22).cgColor
         p.contentView = glass
 
-        // 캐릭터 사진
-        let side: CGFloat = 124
-        let pic = NSView(frame: NSRect(x: 24, y: (H - side) / 2, width: side, height: side))
-        pic.wantsLayer = true
-        pic.layer?.cornerRadius = 24
-        pic.layer?.masksToBounds = true
-        pic.layer?.contentsGravity = .resizeAspectFill
-        pic.layer?.contents = image
-        pic.layer?.backgroundColor = NSColor(white: 0, alpha: 0.4).cgColor
-        glass.addSubview(pic)
+        var leftEdge: CGFloat
+        if let yt = youtube {
+            let vw: CGFloat = 384, vh: CGFloat = 216
+            let web = makePlayer(yt, frame: NSRect(x: 22, y: (H - vh) / 2, width: vw, height: vh))
+            glass.addSubview(web)
+            player = web
+            leftEdge = 22 + vw + 24
+            if yt.maxSec > 0 {
+                let t = Timer(timeInterval: yt.maxSec, repeats: false) { [weak self] _ in
+                    self?.player?.evaluateJavaScript("window.player && player.pauseVideo && player.pauseVideo()")
+                }
+                RunLoop.main.add(t, forMode: .common)
+                pauseTimer = t
+            }
+        } else {
+            let side: CGFloat = 124
+            let pic = NSView(frame: NSRect(x: 24, y: (H - side) / 2, width: side, height: side))
+            pic.wantsLayer = true
+            pic.layer?.cornerRadius = 24
+            pic.layer?.masksToBounds = true
+            pic.layer?.contentsGravity = .resizeAspectFill
+            pic.layer?.contents = image
+            pic.layer?.backgroundColor = NSColor(white: 0, alpha: 0.4).cgColor
+            glass.addSubview(pic)
+            leftEdge = 24 + side + 22
+        }
+        let textW = W - leftEdge - 24
 
-        // 빨간 점(머리핀 색)
-        let tx = 24 + side + 22
-        let dot = NSView(frame: NSRect(x: tx, y: H - 42, width: 8, height: 8))
+        // 빨간 점(머리핀 색) + 제목
+        let top = hasVideo ? H - 30 : H - 24
+        let dot = NSView(frame: NSRect(x: leftEdge, y: top - 18, width: 8, height: 8))
         dot.wantsLayer = true
         dot.layer?.cornerRadius = 4
         dot.layer?.backgroundColor = NSColor(red: 0.878, green: 0.149, blue: 0.173, alpha: 1).cgColor
         glass.addSubview(dot)
 
         let titleLabel = NSTextField(labelWithString: title)
-        titleLabel.font = .systemFont(ofSize: 26, weight: .bold)
+        titleLabel.font = .systemFont(ofSize: hasVideo ? 24 : 26, weight: .bold)
         titleLabel.textColor = .white
         titleLabel.lineBreakMode = .byTruncatingTail
-        titleLabel.frame = NSRect(x: tx + 16, y: H - 56, width: W - tx - 40, height: 34)
+        titleLabel.frame = NSRect(x: leftEdge + 16, y: top - 32, width: textW - 16, height: 34)
         glass.addSubview(titleLabel)
 
         let bodyLabel = NSTextField(wrappingLabelWithString: body)
         bodyLabel.font = .systemFont(ofSize: 14)
         bodyLabel.textColor = NSColor(white: 1, alpha: 0.72)
-        bodyLabel.maximumNumberOfLines = 2
-        bodyLabel.frame = NSRect(x: tx, y: H - 100, width: W - tx - 24, height: 40)
+        bodyLabel.maximumNumberOfLines = hasVideo ? 3 : 2
+        let bodyH: CGFloat = hasVideo ? 60 : 40
+        bodyLabel.frame = NSRect(x: leftEdge, y: top - 40 - bodyH, width: textW, height: bodyH)
         glass.addSubview(bodyLabel)
 
+        if let song = songTitle, !song.isEmpty {
+            let songLabel = NSTextField(labelWithString: "♪ " + song)
+            songLabel.font = .systemFont(ofSize: 12, weight: .medium)
+            songLabel.textColor = NSColor(white: 1, alpha: 0.55)
+            songLabel.lineBreakMode = .byTruncatingTail
+            songLabel.frame = NSRect(x: leftEdge, y: 66, width: textW, height: 18)
+            glass.addSubview(songLabel)
+        }
+
         // 버튼 (첫 번째가 Return 키)
-        var bx = tx
+        var bx = leftEdge
         for (i, a) in actions.enumerated() {
             let b = NSButton(title: a["label"] ?? "확인", target: self, action: #selector(tap(_:)))
             b.identifier = NSUserInterfaceItemIdentifier(a["id"] ?? "ok")
             b.bezelStyle = .rounded
             b.controlSize = .large
             b.font = .systemFont(ofSize: 14, weight: .semibold)
-            if i == 0 { b.keyEquivalent = "\r" }          // Return = 첫 번째 버튼
+            if i == 0 { b.keyEquivalent = "\r" }
             b.sizeToFit()
-            b.frame = NSRect(x: bx, y: 22, width: max(96, b.frame.width + 18), height: 34)
+            b.frame = NSRect(x: bx, y: 22, width: max(92, b.frame.width + 16), height: 34)
             glass.addSubview(b)
-            bx += b.frame.width + 10
+            bx += b.frame.width + 8
         }
 
         // 위에서 살짝 내려오며 나타나기
@@ -216,6 +262,50 @@ final class FinishOverlay: NSObject {
         panel = p
     }
 
+    /// 유튜브 공식 플레이어(IFrame API). 정해 둔 지점부터 재생하고, 끝나면 그 지점부터 다시.
+    private func makePlayer(_ yt: YouTubeAlarm, frame: NSRect) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.mediaTypesRequiringUserActionForPlayback = []
+        config.userContentController.add(self, name: "yt")
+        let web = WKWebView(frame: frame, configuration: config)
+        web.wantsLayer = true
+        web.layer?.cornerRadius = 14
+        web.layer?.masksToBounds = true
+        let html = """
+        <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <style>html,body{margin:0;height:100%;background:#000;overflow:hidden}#p{width:100%;height:100%}</style></head>
+        <body><div id="p"></div><script>
+        var ID="\(yt.videoId)", START=\(yt.start), VOL=\(yt.volume), player, played=false;
+        function send(m){ try{ webkit.messageHandlers.yt.postMessage(m); }catch(e){} }
+        var tag=document.createElement('script'); tag.src='https://www.youtube.com/iframe_api';
+        tag.onerror=function(){ send({error:'offline'}); };
+        document.head.appendChild(tag);
+        function onYouTubeIframeAPIReady(){
+          player=new YT.Player('p',{width:'100%',height:'100%',videoId:ID,
+            playerVars:{autoplay:1,start:START,playsinline:1,rel:0,controls:1},
+            events:{
+              onReady:function(e){ e.target.setVolume(VOL); e.target.seekTo(START,true); e.target.playVideo(); },
+              onStateChange:function(e){
+                if(e.data===1&&!played){ played=true; send({playing:true}); }
+                if(e.data===0){ player.seekTo(START,true); player.playVideo(); }
+              },
+              onError:function(e){ send({error:String(e.data)}); }
+            }});
+        }
+        setTimeout(function(){ if(!played) send({error:'timeout'}); }, 9000);
+        </script></body></html>
+        """
+        // YouTube는 삽입 플레이어를 쓰는 앱이 Referer로 자신을 밝히도록 요구해요.
+        web.loadHTMLString(html, baseURL: URL(string: "https://local.kkh.charactertimer/"))
+        return web
+    }
+
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard let m = message.body as? [String: Any] else { return }
+        if m["playing"] != nil { onYouTubePlaying?() }
+        if m["error"] != nil { onYouTubeFailed?() }
+    }
+
     @objc private func tap(_ sender: NSButton) {
         let id = sender.identifier?.rawValue ?? "ok"
         close()
@@ -223,8 +313,17 @@ final class FinishOverlay: NSObject {
     }
 
     func close() {
+        pauseTimer?.invalidate()
+        pauseTimer = nil
+        if let web = player {
+            web.configuration.userContentController.removeScriptMessageHandler(forName: "yt")
+            web.loadHTMLString("", baseURL: nil)      // 소리 바로 끊기
+            web.removeFromSuperview()
+        }
+        player = nil
         panel?.orderOut(nil)
         panel = nil
+        isPreview = false
     }
 }
 
@@ -238,13 +337,28 @@ final class Bridge: NSObject, WKScriptMessageHandler {
     let sound = SoundPlayer()
     let overlay = FinishOverlay()
 
+    private var fallbackVolume: Float = 0.8
+    private var fallbackMaxSec: Double = 30
+
     override init() {
         super.init()
         overlay.onAction = { [weak self] id in
-            self?.sound.stop()
+            guard let self = self else { return }
+            self.sound.stop()
+            if id == "closePreview" {
+                self.web?.evaluateJavaScript("window.__previewClosed && window.__previewClosed()")
+                return
+            }
             let safe = id.filter { $0.isLetter || $0.isNumber }
-            self?.web?.evaluateJavaScript("window.__overlayAction && window.__overlayAction('\(safe)')")
+            self.web?.evaluateJavaScript("window.__overlayAction && window.__overlayAction('\(safe)')")
         }
+        // 영상이 막혔거나 인터넷이 끊기면 기본 소리로 대신 울려요.
+        overlay.onYouTubeFailed = { [weak self] in
+            guard let self = self else { return }
+            self.sound.play(["type": "system", "name": "Glass"], loop: !self.overlay.isPreview,
+                            volume: self.fallbackVolume, maxSec: self.overlay.isPreview ? 3 : self.fallbackMaxSec)
+        }
+        overlay.onYouTubePlaying = { [weak self] in self?.sound.stop() }
     }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -261,10 +375,23 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         case "deleteSound":
             if let n = body["name"] as? String, isSafeName(n) { try? FileManager.default.removeItem(at: soundDir.appendingPathComponent(n)) }
         case "previewSound":
-            sound.play(body["sound"] as? [String: Any] ?? [:], loop: false,
-                       volume: Float(body["volume"] as? Double ?? 0.8), maxSec: 15)
+            let spec = body["sound"] as? [String: Any] ?? [:]
+            let vol = body["volume"] as? Double ?? 0.8
+            if let yt = youTube(spec, volume: vol, maxSec: 0) {
+                fallbackVolume = Float(vol)
+                sound.stop()
+                overlay.show(title: "미리 듣기", body: "알람이 울리면 이렇게 이 지점부터 나와요.",
+                             songTitle: spec["title"] as? String, image: nil, youtube: yt,
+                             actions: [["id": "closePreview", "label": "닫기"]], preview: true)
+            } else {
+                if overlay.isPreview { overlay.close() }
+                sound.play(spec, loop: false, volume: Float(vol), maxSec: 15)
+            }
         case "stopSound":
             sound.stop()
+            if overlay.isPreview { overlay.close() }
+        case "ytInfo":
+            ytInfo(url: body["url"] as? String ?? "", videoId: body["videoId"] as? String ?? "")
         case "finish":
             finish(body)
         case "dismiss":
@@ -288,8 +415,16 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         let showOverlay = b["overlay"] as? Bool ?? true
         var maxSec = b["maxSec"] as? Double ?? 30
         if !showOverlay && maxSec <= 0 { maxSec = 10 }      // 끌 버튼이 없으면 무한 반복하지 않게
-        sound.play(b["sound"] as? [String: Any] ?? [:], loop: true,
-                   volume: Float(b["volume"] as? Double ?? 0.8), maxSec: maxSec)
+        let vol = b["volume"] as? Double ?? 0.8
+        var spec = b["sound"] as? [String: Any] ?? [:]
+        fallbackVolume = Float(vol)
+        fallbackMaxSec = maxSec
+
+        // 유튜브는 플레이어가 화면에 보여야 해서, 알림 창을 끈 경우엔 기본 소리로 울려요.
+        let yt = showOverlay ? youTube(spec, volume: vol, maxSec: maxSec) : nil
+        if yt == nil, (spec["type"] as? String) == "youtube" { spec = ["type": "system", "name": "Glass"] }
+        if yt == nil { sound.play(spec, loop: true, volume: Float(vol), maxSec: maxSec) } else { sound.stop() }
+
         NSApp.requestUserAttention(.criticalRequest)
         guard showOverlay else { return }
         let actions = (b["actions"] as? [[String: Any]] ?? []).map { a in
@@ -297,8 +432,34 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         }
         overlay.show(title: b["title"] as? String ?? "끝났어요",
                      body: b["body"] as? String ?? "",
+                     songTitle: spec["title"] as? String,
                      image: squareImage(src: b["image"] as? String ?? "", focus: b["focus"] as? String ?? "50% 30%"),
+                     youtube: yt,
                      actions: actions.isEmpty ? [["id": "ok", "label": "확인"]] : actions)
+    }
+
+    /// 재생 정보가 유튜브면 플레이어 설정으로 바꿔 준다(영상 id 검사 포함).
+    private func youTube(_ spec: [String: Any], volume: Double, maxSec: Double) -> YouTubeAlarm? {
+        guard (spec["type"] as? String) == "youtube", let id = spec["videoId"] as? String,
+              id.count == 11, id.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }), id.allSatisfy({ $0.isASCII })
+        else { return nil }
+        let start = max(0, Int(spec["start"] as? Double ?? 0))
+        return YouTubeAlarm(videoId: id, start: start, volume: Int(max(0, min(1, volume)) * 100), maxSec: maxSec)
+    }
+
+    /// 유튜브 oEmbed로 영상 제목을 가져오고, 다른 앱 재생이 막힌 영상인지 확인한다(401/403).
+    private func ytInfo(url: String, videoId: String) {
+        guard var comps = URLComponents(string: "https://www.youtube.com/oembed") else { return }
+        comps.queryItems = [URLQueryItem(name: "url", value: url), URLQueryItem(name: "format", value: "json")]
+        guard let u = comps.url else { return }
+        URLSession.shared.dataTask(with: u) { [weak self] data, resp, _ in
+            var out: [String: Any] = ["videoId": videoId, "status": (resp as? HTTPURLResponse)?.statusCode ?? 0]
+            if let d = data, let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+                out["title"] = j["title"] as? String ?? ""
+                out["author"] = j["author_name"] as? String ?? ""
+            }
+            self?.sendJS("__ytInfo", out)
+        }.resume()
     }
 
     /// 배경 사진에서 얼굴 쪽을 정사각형으로 잘라 온다.
