@@ -1,4 +1,4 @@
-# 타이머 앱 v2.0 개발 가이드
+# 타이머 앱 v2 개발 가이드
 
 이 문서는 앱을 직접 고치고 다시 빌드하려는 사람을 위한 설명이에요.
 앱 사용법은 [README.md](README.md), v1에서 바뀐 점과 이유는 [CHANGELOG.md](CHANGELOG.md)를 보세요.
@@ -61,7 +61,7 @@ Xcode 앱 전체가 없어도 명령줄 도구만 있으면 빌드돼요.
 ## 3. 폴더 구조
 
 ```
-study-timer-v1/
+study-timer/
 ├── README.md               사용 설명서
 ├── make.md                 이 문서
 ├── build.sh                빌드 스크립트
