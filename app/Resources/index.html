@@ -271,11 +271,11 @@
 
   .week-head { display: flex; justify-content: space-between; align-items: baseline; }
   .streak { font-size: 12px; color: var(--dim); }
-  /* 이번 주: 처음 모양 그대로, 막대는 모두 같은 한 가지 색 */
+  /* 이번 주: 처음 모양 그대로, 막대는 모두 같은 색(배경 색에 맞춰 자동) */
   .bars { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; align-items: end; margin-top: 10px; min-height: 60px; }
   .bar-col { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
   .bar-col .b { width: 100%; max-width: 26px; border-radius: 6px; min-height: 3px; transition: height .4s;
-    background: #6c8cff; }
+    background: var(--bar, #6c8cff); }
   .bar-col.empty .b { background: rgba(255,255,255,.14); }
   .bar-col span { font-size: 11px; color: var(--faint); }
   .bar-col.today span { color: var(--text); font-weight: 700; }
@@ -1195,7 +1195,25 @@ function inkIsDark() {
   const eff = lumOf(s.bgColor) * (1 - s.dim * alpha);           // 밝기 막대로 어두워진 만큼
   return alpha > 0.35 && eff > 0.36;
 }
-function applyInk() { app.classList.toggle("ink-dark", inkIsDark()); }
+function applyInk() {
+  const dark = inkIsDark();
+  app.classList.toggle("ink-dark", dark);
+  app.style.setProperty("--bar", barColor(dark));
+}
+/* 이번 주 막대 색: 배경 색과 같은 계열로, 어두운 배경엔 밝게 · 밝은 배경엔 진하게 (회색·사진이면 파랑) */
+function barColor(dark) {
+  const c = state.settings.bgColor;
+  let h = 228, sat = 85;
+  if (c) {
+    const [r, g, b] = hexRgb(c).map((x) => x / 255), max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min, l = (max + min) / 2;
+    const sv = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
+    if (sv >= 0.12) {
+      h = Math.round((d === 0 ? 0 : max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60 + 360) % 360;
+      sat = Math.max(60, Math.min(90, Math.round(sv * 100)));
+    }
+  }
+  return hslHex(h, Math.min(sat, dark ? 72 : 90), dark ? 48 : 70);
+}
 function applyBgColor() {
   const c = state.settings.bgColor;
   app.classList.toggle("solid-bg", !!c);
