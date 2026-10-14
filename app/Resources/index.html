@@ -137,13 +137,27 @@
 
   /* 타이머 카드 */
   .timer { display: flex; flex-direction: column; gap: 16px; }
-  .timer-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .timer-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; position: relative; }
+  .timer-head .seg { flex: none; }
 
   .seg { display: inline-flex; padding: 3px; border-radius: 999px; background: rgba(0,0,0,.28); box-shadow: inset 0 0 0 .5px var(--line); }
   .seg button { height: 30px; padding: 0 14px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--dim); transition: background .2s, color .2s; }
   .seg button[aria-selected="true"] { background: rgba(255,255,255,.92); color: #000; }
 
-  .subjects { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  /* 과목은 한 줄만. 넘치는 과목은 +N 버튼 → 펼친 목록에서 골라요 */
+  .subjects { flex: 1; min-width: 0; display: flex; gap: 6px; flex-wrap: nowrap; justify-content: flex-start; overflow: hidden; }
+  .subjects > :first-child { margin-left: auto; }   /* 오른쪽 정렬이되 넘칠 땐 오른쪽으로 넘쳐서 잴 수 있게 */
+  .subjects .chip[hidden] { display: none; }
+  .chip { flex: none; max-width: 150px; }
+  .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip.more { padding: 0 11px; color: var(--text); background: rgba(255,255,255,.1); }
+  .subj-menu {
+    position: absolute; right: 0; top: calc(100% + 8px); z-index: 6; width: min(360px, 100%);
+    display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; border-radius: 20px; max-height: 220px; overflow-y: auto;
+    background: rgba(24,24,28,.92); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+    box-shadow: 0 12px 40px rgba(0,0,0,.45), inset 0 0 0 .5px rgba(255,255,255,.2); animation: rise .18s ease;
+  }
+  .subj-menu[hidden] { display: none; }
   .chip {
     height: 30px; padding: 0 12px 0 10px; border-radius: 999px;
     display: inline-flex; align-items: center; gap: 7px;
@@ -607,6 +621,7 @@
           <button role="tab" data-mode="pomo">뽀모도로</button>
         </div>
         <div class="subjects" id="subjects" aria-label="과목"></div>
+        <div class="subj-menu" id="subjMenu" hidden></div>
       </div>
       <div class="timer-body">
         <div class="ring" id="ring">
@@ -1098,9 +1113,11 @@ function renderControls() {
   const busy = !!run;
   $$("#modeSeg button").forEach((b) => { b.setAttribute("aria-selected", String(b.dataset.mode === mode())); b.disabled = busy && b.dataset.mode !== mode(); });
 
-  $("#subjects").innerHTML = state.subjects.map((s) =>
-    `<button class="chip" style="--c:${s.color}" data-id="${s.id}" aria-pressed="${s.id === (run ? run.subject : state.settings.subject)}" ${busy ? "disabled" : ""}><i></i>${esc(s.name)}</button>`
-  ).join("");
+  const chipHTML = (s) => `<button class="chip" style="--c:${s.color}" data-id="${s.id}" aria-pressed="${s.id === (run ? run.subject : state.settings.subject)}" ${busy ? "disabled" : ""} title="${esc(s.name)}"><i></i><span>${esc(s.name)}</span></button>`;
+  $("#subjects").innerHTML = state.subjects.map(chipHTML).join("") + `<button class="chip more" id="subjMore" hidden ${busy ? "disabled" : ""} aria-label="과목 더 보기"></button>`;
+  $("#subjMenu").innerHTML = state.subjects.map(chipHTML).join("");
+  if (busy) $("#subjMenu").hidden = true;
+  fitSubjects();
 
   const go = $("#go");
   go.textContent = run ? (run.startedAt ? "일시정지" : "계속") : "시작";
@@ -1187,7 +1204,9 @@ function renderStats() {
 
   const subs = subjectTotals(todayK).filter(([, sec]) => sec >= 60);
   $("#todayStack").innerHTML = today ? subs.map(([id, sec]) => `<i style="width:${(sec / today) * 100}%;background:${subjectOf(id).color}"></i>`).join("") : "";
-  $("#todayLegend").innerHTML = subs.slice(0, 4).map(([id, sec]) => `<span><b style="background:${subjectOf(id).color}"></b>${esc(subjectOf(id).name)} ${fmtDur(sec)}</span>`).join("");
+  // 과목이 많으면 6개까지 보여 주고 나머지는 "외 N과목"
+  $("#todayLegend").innerHTML = subs.slice(0, 6).map(([id, sec]) => `<span><b style="background:${subjectOf(id).color}"></b>${esc(subjectOf(id).name)} ${fmtDur(sec)}</span>`).join("")
+    + (subs.length > 6 ? `<span class="hint">외 ${subs.length - 6}과목</span>` : "");
 
   const d0 = new Date(); d0.setHours(0, 0, 0, 0); d0.setDate(d0.getDate() - d0.getDay());
   const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(d0); d.setDate(d0.getDate() + i); return d; });
@@ -1206,7 +1225,14 @@ function renderStats() {
 function renderAll() { renderControls(); lastStatsSec = 0; renderLive(); }
 
 /* ════════════════ 이벤트: 타이머 ════════════════ */
-$("#go").onclick = () => (run && run.startedAt ? pause() : start());
+/* 시작/일시정지: 아주 빠르게 두 번 눌려서 켜졌다 바로 꺼지는 일을 막아요 */
+let lastGo = 0;
+$("#go").onclick = () => {
+  const now = Date.now();
+  if (now - lastGo < 350) return;
+  lastGo = now;
+  run && run.startedAt ? pause() : start();
+};
 $("#stop").onclick = stopByUser;
 $("#modeSeg").onclick = (e) => {
   const b = e.target.closest("button[data-mode]");
@@ -1215,12 +1241,40 @@ $("#modeSeg").onclick = (e) => {
   pomoRound = 1;
   save(); renderAll();
 };
+/* 과목 칩이 한 줄에 다 안 들어가면 뒤에서부터 숨기고 +N 버튼을 보여요(고른 과목은 늘 보이게) */
+function fitSubjects() {
+  const box = $("#subjects");
+  const chips = [...box.querySelectorAll(".chip:not(.more)")];
+  const more = $("#subjMore");
+  chips.forEach((c) => (c.hidden = false));
+  more.hidden = true;
+  if (box.scrollWidth <= box.clientWidth + 1) return;
+  more.hidden = false;
+  let hidden = 0;
+  for (let i = chips.length - 1; i >= 0 && box.scrollWidth > box.clientWidth + 1; i--) {
+    if (chips[i].getAttribute("aria-pressed") === "true") continue;
+    chips[i].hidden = true; hidden++;
+    more.textContent = `+${hidden}`;
+  }
+  more.textContent = `+${hidden}`;
+}
+window.addEventListener("resize", () => { if (!compact) fitSubjects(); });
+function pickSubject(id) {
+  if (run) return;
+  state.settings.subject = id;
+  $("#subjMenu").hidden = true;
+  save(); renderAll();
+}
 $("#subjects").onclick = (e) => {
   const b = e.target.closest(".chip");
   if (!b || run) return;
-  state.settings.subject = b.dataset.id;
-  save(); renderAll();
+  if (b.id === "subjMore") { $("#subjMenu").hidden = !$("#subjMenu").hidden; return; }
+  pickSubject(b.dataset.id);
 };
+$("#subjMenu").onclick = (e) => { const b = e.target.closest(".chip"); if (b) pickSubject(b.dataset.id); };
+document.addEventListener("mousedown", (e) => {
+  if (!$("#subjMenu").hidden && !e.target.closest("#subjMenu, #subjMore")) $("#subjMenu").hidden = true;
+});
 $("#adjust").onclick = (e) => {
   const b = e.target.closest("button");
   if (!b || run) return;
@@ -1233,8 +1287,19 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$("#alertBox").hidden) { hideAlert(); return; }
   if (e.key === "Escape" && !$("#sheetWrap").hidden) { closeSheet(); return; }
   const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
-  if (e.code === "Space" && !typing && $("#sheetWrap").hidden) { e.preventDefault(); $("#go").click(); }
+  if (e.code === "Space" && !typing && $("#sheetWrap").hidden) {
+    e.preventDefault();
+    if (!e.repeat) $("#go").click();     // 꾹 누르고 있어도 한 번만
+  }
+  if (e.key === "Escape" && !$("#subjMenu").hidden) $("#subjMenu").hidden = true;
 });
+// 버튼에 포커스가 있을 때 Space를 떼면 그 버튼이 한 번 더 눌려서 켜졌다 꺼지던 문제 막기
+document.addEventListener("keyup", (e) => {
+  const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+  if (e.code === "Space" && !typing && $("#sheetWrap").hidden) e.preventDefault();
+});
+// 마우스로 누른 버튼은 포커스를 남기지 않아요(그래야 Space가 늘 시작/일시정지로만 동작)
+document.addEventListener("mouseup", (e) => { const b = e.target.closest("button"); if (b && e.detail > 0) setTimeout(() => b.blur(), 0); });
 
 /* ════════════════ 시트 공통 ════════════════ */
 let sheetRender = null;

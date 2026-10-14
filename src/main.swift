@@ -677,6 +677,8 @@ final class CTWebView: WKWebView {
     var dragLocked = false
     override func mouseDragged(with event: NSEvent) { if !dragLocked { super.mouseDragged(with: event) } }
     override var mouseDownCanMoveWindow: Bool { false }
+    // 창이 뒤에 있을 때도 첫 클릭이 바로 버튼에 들어가게(창 앞으로 가져오는 데만 쓰이지 않게)
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 final class DragStrip: NSView {
