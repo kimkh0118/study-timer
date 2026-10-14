@@ -163,29 +163,17 @@
     box-shadow: 0 12px 40px rgba(0,0,0,.45), inset 0 0 0 .5px rgba(255,255,255,.2); animation: rise .18s ease;
   }
   .subj-menu[hidden] { display: none; }
-  /* 색 고르기 창: 기본 팔레트(무채색·진한·선명·파스텔) + 색 격자 + Mac 색상 패널 */
+  /* 과목 색 고르기: 색 12개 + (+) 한 줄 */
   .color-pop {
-    position: fixed; z-index: 40; width: 372px; padding: 14px 14px 12px; border-radius: 18px; overflow-y: auto;
-    background: rgba(28,28,32,.94); -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px); color: #f5f5f7;
-    box-shadow: 0 16px 48px rgba(0,0,0,.5), inset 0 0 0 .5px rgba(255,255,255,.22); animation: rise .16s ease;
-    font-size: 12px;
+    position: fixed; z-index: 40; display: flex; gap: 7px; padding: 10px 12px; border-radius: 999px;
+    background: rgba(28,28,32,.94); -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px);
+    box-shadow: 0 12px 36px rgba(0,0,0,.45), inset 0 0 0 .5px rgba(255,255,255,.22); animation: rise .16s ease;
   }
   .color-pop[hidden] { display: none; }
-  .cp-row { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
-  .cp-row .cp-name { width: 54px; flex: none; color: rgba(255,255,255,.6); font-size: 11.5px; white-space: nowrap; }
-  .cp-cell { width: 20px; height: 20px; border-radius: 5px; flex: none; padding: 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); transition: transform .1s; }
-  .cp-cell:hover { transform: scale(1.18); z-index: 1; position: relative; }
-  .cp-cell[aria-pressed="true"] { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px rgba(0,0,0,.6); }
-  .cp-sep { height: 1px; background: rgba(255,255,255,.12); margin: 10px 0; }
-  .cp-title { color: rgba(255,255,255,.6); font-size: 11.5px; margin-bottom: 6px; }
-  .cp-grid { display: grid; grid-template-columns: repeat(14, 20px); gap: 3px; justify-content: space-between; }
-  .cp-grid .cp-cell { width: 20px; height: 20px; border-radius: 4px; }
-  .cp-foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
-  .cp-now { width: 26px; height: 26px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.3); }
-  .cp-hex { font: 500 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: rgba(255,255,255,.75); flex: 1; }
-  .cp-more { position: relative; height: 28px; padding: 0 12px; border-radius: 9px; background: rgba(255,255,255,.14); color: #fff; font-size: 12px; display: inline-flex; align-items: center; cursor: pointer; }
-  .cp-more:hover { background: rgba(255,255,255,.22); }
-  .cp-more input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; border: 0; padding: 0; cursor: pointer; }
+  .color-pop .swatch { width: 24px; height: 24px; }
+  .swatch:not(.custom):hover { transform: scale(1.12); }
+  .swatch { transition: transform .1s; }
+  .swatch.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: 0; padding: 0; }
   .subj-menu .chip { max-width: 100%; }
   .chip {
     height: 30px; padding: 0 12px 0 10px; border-radius: 999px;
@@ -854,6 +842,7 @@ function migrate(raw) {
   if (!s.wallpapers.some((w) => w.id === s.wallpaper)) s.wallpaper = "b1";
   if (!s.wallPos || typeof s.wallPos !== "object") s.wallPos = {};
   if (!Array.isArray(s.settings.bgCustom)) s.settings.bgCustom = [];
+  { const st = s.settings; if (st.bgColor && !BG_COLORS.includes(st.bgColor) && !st.bgCustom.includes(st.bgColor)) st.bgCustom = [...st.bgCustom, st.bgColor].slice(-6); }   // 예전 팔레트에서 고른 색은 내 색으로
   s.settings.bgClear = Math.min(0.9, Math.max(0, Number(s.settings.bgClear) || 0));
   if (!['auto', 'light', 'dark'].includes(s.settings.ink)) s.settings.ink = 'auto';
   return s;
@@ -1157,14 +1146,10 @@ function applyWallpaper() {
   if ($("#miniImg")) { $("#miniImg").src = w.src; $("#miniImg").style.objectPosition = posOf(w); }
 }
 /* 오른쪽 배경 색: ""면 사진을 흐리게 깔고, 색을 고르면 그 색으로 */
-// 오른쪽 배경 기본 색: 무채색 · 진한 색 · 선명한 색 · 밝은 파스텔 (밝은 색이면 글씨가 자동으로 검게)
-const BG_PALETTE = [
-  ["무채색", ["#000000", "#1c1c1e", "#2c2c2e", "#3a3a3c", "#636366", "#8e8e93", "#c7c7cc", "#e5e5ea", "#f2f2f7", "#ffffff"]],
-  ["진한 색", ["#0b1d3a", "#1e3a8a", "#134e4a", "#14532d", "#3f2a14", "#4c1d1d", "#4a044e", "#2e1065", "#3b0764", "#1f2937"]],
-  ["선명한 색", ["#2563eb", "#0284c7", "#0e7490", "#059669", "#15803d", "#65a30d", "#ca8a04", "#ea580c", "#dc2626", "#db2777", "#9333ea", "#4f46e5"]],
-  ["파스텔", ["#dbeafe", "#cffafe", "#ccfbf1", "#dcfce7", "#ecfccb", "#fef9c3", "#ffedd5", "#fee2e2", "#fce7f3", "#f3e8ff", "#e0e7ff", "#f5e6c8"]],
-];
-const BG_COLORS = BG_PALETTE.flatMap(([, cols]) => cols);
+// 오른쪽 배경 기본 색 12개(어두운 색 · 선명한 색 · 밝은 색). 밝은 색이면 글씨가 자동으로 검게. 더 필요하면 + 로 직접
+const BG_COLORS = ["#1c1c1e", "#3a3a3c", "#1e3a8a", "#2563eb", "#059669", "#ea580c", "#dc2626", "#9333ea", "#dbeafe", "#fce7f3", "#fef9c3", "#f2f2f7"];
+// 과목 색 고르기에서 보여 줄 색 12개
+const SUBJ_COLORS = [...COLORS.slice(0, 7), "#ff5fa2", "#8bc34a", "#5b5bd6", "#a0522d", "#c9c9cf"];
 /* 글씨 색: 자동이면 오른쪽 배경이 밝을 때 검정 글씨로 */
 function lumOf(hex) {
   const m = toHex(hex).slice(1); const ch = [0, 2, 4].map((i) => parseInt(m.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
@@ -1644,9 +1629,9 @@ function bgColorsHTML() {
       </div></div>
     <div class="bg-row"><span class="hint">오른쪽 배경 색</span>
       <button class="swatch photo" data-bgc="" aria-pressed="${!c}" title="사진에서" aria-label="사진에서"></button>
+      ${BG_COLORS.map((col) => sw(col, false)).join("")}
       ${state.settings.bgCustom.map((col) => sw(col, true)).join("")}
-      <button class="swatch custom" id="bgPick" title="색 추가" aria-label="색 추가"><span>${PLUS_ICON}</span></button></div>
-    ${BG_PALETTE.map(([name, cols]) => `<div class="bg-row"><span class="hint">${name}</span>${cols.map((col) => sw(col, false)).join("")}</div>`).join("")}`;
+      <label class="swatch custom" title="다른 색 고르기" aria-label="다른 색 고르기"><span>${PLUS_ICON}</span><input type="color" id="bgPick" value="${c || "#3b82f6"}"></label></div>`;
 }
 function markSwatch() {
   const box = $("#bgColors");
@@ -1657,91 +1642,45 @@ function markSwatch() {
 function bindBgPick() {
   const pick = $("#bgPick");
   if (!pick) return;
-  // + → 색 고르기 창. Mac 색상 패널에서 고르는 동안은 미리 보기, 다 고르면 내 색으로 추가
-  pick.onclick = () => {
-    const s = state.settings, before = s.bgColor;
-    openColorPop(pick, s.bgColor || "#3b82f6", {
-      preview: (col) => { s.bgColor = col; applyBgColor(); },
-      cancel: () => { s.bgColor = before; applyBgColor(); },
-      pick: (col) => {
-        if (!BG_COLORS.includes(col) && !s.bgCustom.includes(col)) s.bgCustom = [...s.bgCustom, col].slice(-8);
-        s.bgColor = col; applyBgColor(); save(); markSwatch();
-      },
-    });
+  // + → Mac 색 고르기. 고르는 동안은 미리 보기, 다 고르면 내 색으로 추가
+  pick.oninput = (e) => { state.settings.bgColor = e.target.value; applyBgColor(); };
+  pick.onchange = (e) => {
+    const col = e.target.value.toLowerCase();
+    const s = state.settings;
+    if (!BG_COLORS.includes(col) && !s.bgCustom.includes(col)) s.bgCustom = [...s.bgCustom, col].slice(-6);
+    s.bgColor = col; applyBgColor(); save(); markSwatch();
   };
 }
 
-/* ── 색 고르기 창 (배경 색 +, 과목 색 공통) ── */
-const CP_HUES = [0, 15, 30, 42, 54, 75, 110, 150, 175, 195, 215, 240, 270, 310];
-const CP_LIGHT = [[70, 18], [75, 28], [78, 38], [80, 48], [82, 58], [80, 68], [75, 78], [70, 87]];
-const CP_GRID = CP_LIGHT.flatMap(([sat, l]) => CP_HUES.map((h) => hslHex(h, sat, l)));
-let colorPop = null;   // { anchor, cur, preview, pick, cancel, done }
-function colorPopHTML(cur) {
-  const cell = (col) => `<button class="cp-cell" data-cp="${col}" style="background:${col}" aria-pressed="${col === cur}" aria-label="${col}" title="${col}"></button>`;
-  return `${BG_PALETTE.map(([name, cols]) => `<div class="cp-row"><span class="cp-name">${name}</span>${cols.map(cell).join("")}</div>`).join("")}
-    <div class="cp-sep"></div>
-    <div class="cp-title">더 많은 색</div>
-    <div class="cp-grid">${CP_GRID.map(cell).join("")}</div>
-    <div class="cp-foot">
-      <span class="cp-now" style="background:${cur}"></span><span class="cp-hex">${cur.toUpperCase()}</span>
-      <label class="cp-more">직접 고르기…<input type="color" id="cpNative" value="${cur}"></label>
-    </div>`;
-}
-function openColorPop(anchor, cur, opts) {
+/* ── 과목 색 고르기: 색 12개 한 줄 + (다른 색은 + 로 Mac 색 고르기) ── */
+let colorPop = null;   // { anchor, pick }
+function openColorPop(anchor, cur, pick) {
   if (colorPop && colorPop.anchor === anchor) { closeColorPop(); return; }   // 같은 버튼 다시 누르면 닫기
-  closeColorPop();
-  cur = toHex(cur).toLowerCase();
+  cur = toHex(cur);
   const m = $("#colorPop");
-  colorPop = { anchor, cur, ...opts, done: false };
-  m.innerHTML = colorPopHTML(cur);
+  colorPop = { anchor, pick };
+  m.innerHTML = SUBJ_COLORS.map((col) => `<button class="swatch" data-cp="${col}" style="background:${col}" aria-pressed="${col === cur}" aria-label="${col}"></button>`).join("")
+    + `<label class="swatch custom" title="다른 색 고르기" aria-label="다른 색 고르기"><span>${PLUS_ICON}</span><input type="color" id="cpNative" value="${cur}"></label>`;
   m.hidden = false;
-  const r = anchor.getBoundingClientRect(), W = innerWidth, H = innerHeight, gap = 8, pad = 10;
-  const width = Math.min(372, W - pad * 2);
-  m.style.width = width + "px";
-  m.style.left = Math.max(pad, Math.min(W - width - pad, r.left + r.width / 2 - width / 2)) + "px";
-  const below = H - r.bottom - gap - pad, above = r.top - gap - pad, want = m.scrollHeight;
-  if (want <= below || below >= above) { m.style.top = r.bottom + gap + "px"; m.style.bottom = ""; m.style.maxHeight = Math.max(160, below) + "px"; }
-  else { m.style.top = ""; m.style.bottom = H - r.top + gap + "px"; m.style.maxHeight = Math.max(160, above) + "px"; }
+  const r = anchor.getBoundingClientRect(), W = innerWidth, H = innerHeight, pad = 10, w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = Math.max(pad, Math.min(W - w - pad, r.left - 8)) + "px";
+  m.style.top = (r.bottom + 6 + h + pad <= H ? r.bottom + 6 : Math.max(pad, r.top - 6 - h)) + "px";
   const nat = $("#cpNative");
-  nat.oninput = (e) => {
-    const col = e.target.value.toLowerCase();
-    m.querySelector(".cp-now").style.background = col;
-    m.querySelector(".cp-hex").textContent = col.toUpperCase();
-    colorPop && colorPop.preview && colorPop.preview(col);
-  };
-  nat.onchange = (e) => commitColorPop(e.target.value.toLowerCase());
-}
-function commitColorPop(col) {
-  if (!colorPop) return;
-  const p = colorPop;
-  p.done = true;
-  closeColorPop();
-  p.pick(col);
+  nat.oninput = (e) => colorPop && colorPop.pick(e.target.value.toLowerCase(), false);
+  nat.onchange = (e) => { const p = colorPop; closeColorPop(); p && p.pick(e.target.value.toLowerCase(), true); };
 }
 function closeColorPop() {
   const m = $("#colorPop");
   if (!m || m.hidden) return;
-  m.hidden = true; m.innerHTML = "";
-  const p = colorPop; colorPop = null;
-  if (p && !p.done && p.cancel) p.cancel();
+  m.hidden = true; m.innerHTML = ""; colorPop = null;
 }
 $("#colorPop").addEventListener("click", (e) => {
   const b = e.target.closest("[data-cp]");
-  if (b) commitColorPop(b.dataset.cp);
-});
-$("#colorPop").addEventListener("mouseover", (e) => {
-  const b = e.target.closest("[data-cp]");
   if (!b || !colorPop) return;
-  $("#colorPop .cp-now").style.background = b.dataset.cp;
-  $("#colorPop .cp-hex").textContent = b.dataset.cp.toUpperCase();
-});
-$("#colorPop").addEventListener("mouseleave", () => {
-  if (!colorPop || !$("#colorPop .cp-now")) return;
-  $("#colorPop .cp-now").style.background = colorPop.cur;
-  $("#colorPop .cp-hex").textContent = colorPop.cur.toUpperCase();
+  const p = colorPop; closeColorPop(); p.pick(b.dataset.cp, true);
 });
 document.addEventListener("mousedown", (e) => {
-  if (colorPop && !e.target.closest("#colorPop") && e.target !== colorPop.anchor && !colorPop.anchor.contains(e.target)) {
+  if (colorPop && !e.target.closest("#colorPop") && !colorPop.anchor.contains(e.target)) {
     closeColorPop();
     if (e.target.id === "sheetWrap") e.stopPropagation();   // 바깥(어두운 곳) 클릭은 색 창만 닫고 설정 창은 그대로
   }
@@ -2069,12 +2008,10 @@ $("#sheetBody").addEventListener("click", (e) => {
   if (sheetRender !== renderSettings) return;
   const t = e.target.closest("button");
   if (!t) return;
-  if (t.dataset.subjcolor) {          // 과목 색 → 색 고르기 창
+  if (t.dataset.subjcolor) {          // 과목 색 → 색 고르기
     const sub = state.subjects.find((x) => x.id === t.dataset.subjcolor);
     if (!sub) return;
-    const before = sub.color;
-    const show = (col) => { sub.color = col; t.style.setProperty("--c", col); renderAll(); };
-    openColorPop(t, sub.color, { preview: show, cancel: () => show(before), pick: (col) => { show(col); save(); } });
+    openColorPop(t, sub.color, (col, done) => { sub.color = col; t.style.setProperty("--c", col); renderAll(); if (done) save(); });
     return;
   }
   if (t.dataset.k) {
