@@ -441,7 +441,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             NSApp.dockTile.badgeLabel = text.isEmpty ? nil : text
         case "onTop":
             onTop = body["value"] as? Bool ?? false
-            if normalFrame == nil { window?.level = onTop ? .floating : .normal }   // 간소화 중엔 항상 위
+            applyTopLevel()
         case "alarm":
             scheduleAlarm(at: body["at"] as? Double)
         case "busy":
@@ -454,6 +454,14 @@ final class Bridge: NSObject, WKScriptMessageHandler {
     }
 
     private var onTop = false
+    /// 창 층: 압정을 켜면 다른 창보다 항상 위(간소화 창은 데스크탑을 옮겨도 따라와요),
+    /// 끄면 보통 창처럼 다른 창을 누르면 그 아래로 가요.
+    func applyTopLevel() {
+        guard let w = window else { return }
+        w.level = onTop ? .floating : .normal
+        w.collectionBehavior = (onTop && normalFrame != nil) ? [.canJoinAllSpaces, .fullScreenAuxiliary] : []
+    }
+
     /// 웹 화면이 그려지지 않고 검게 남을 때 다시 그리게 해요.
     func repaintWeb() {
         guard let web = web else { return }
@@ -475,8 +483,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             w.isMovableByWindowBackground = false
             (web as? CTWebView)?.dragLocked = true      // 끌면 웹 화면 대신 창이 움직여요
             (web as? CTWebView)?.onMoved = { p in UserDefaults.standard.set([Double(p.x), Double(p.y)], forKey: "compactOrigin") }
-            w.level = .floating                     // 항상 위에
-            w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]   // 데스크탑을 옮겨도 따라와요
+            applyTopLevel()                         // 압정(항상 위에) 설정을 그대로 따라요
             buttons.forEach { w.standardWindowButton($0)?.isHidden = true }
             let size = NSSize(width: 420, height: 180)
             let vf = (w.screen ?? NSScreen.main)?.visibleFrame ?? w.frame
@@ -491,11 +498,10 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         } else {
             guard let nf = normalFrame else { return }
             normalFrame = nil
+            applyTopLevel()                         // 원래 창: 압정 설정대로
             w.styleMask.insert(.resizable)
             w.isMovable = true
             (web as? CTWebView)?.dragLocked = false
-            w.level = onTop ? .floating : .normal
-            w.collectionBehavior = []
             buttons.forEach { w.standardWindowButton($0)?.isHidden = false }
             w.setFrame(nf, display: true, animate: true)
             w.contentMinSize = NSSize(width: 1000, height: 680)
