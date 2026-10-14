@@ -60,7 +60,22 @@
   .dim { background: #000; opacity: calc(var(--dim-amount, .15) * var(--bg-alpha, 1)); }
   .app.solid-bg .bg-blur { display: none; }
   .bg-colors { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
-  .bg-pick { width: 34px; height: 34px; }
+  .bg-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .bg-row > .hint:first-child { width: 92px; flex: none; }
+  .bg-row .seg button { height: 28px; padding: 0 12px; }
+  .bg-colors .swatch { width: 26px; height: 26px; }
+  .bg-colors .swatch.bg-pick { width: 32px; height: 32px; }
+  .swatch { width: 28px; height: 28px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); flex: none; position: relative; overflow: hidden; }
+  .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px #fff; }
+  .swatch.photo { background: linear-gradient(135deg, #8a6a5a, #3a3a52); }
+  .swatch.custom { background: rgba(255,255,255,.12); display: grid; place-items: center; cursor: pointer; }
+  .swatch.custom span svg { width: 12px; height: 12px; }
+  .swatch.custom span { display: grid; place-items: center; pointer-events: none; }
+  .swatch-wrap { position: relative; display: inline-flex; }
+  .swatch-del { position: absolute; right: -5px; top: -5px; width: 16px; height: 16px; border-radius: 50%; background: rgba(0,0,0,.75); display: grid; place-items: center; opacity: 0; transition: opacity .15s; }
+  .swatch-del svg { width: 7px; height: 7px; }
+  .swatch-wrap:hover .swatch-del { opacity: 1; }
+  .swatch.custom:disabled { opacity: .35; cursor: default; }
   .bg-pick.empty { background: conic-gradient(from 90deg, #ffd6e0, #fff1b8, #c8f2d8, #cfe8ff, #e5d9ff, #ffd6e0); }
 
   .art { position: relative; margin: 0; height: 100vh; overflow: hidden; }
@@ -175,6 +190,14 @@
   .pk-sw { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
   .pk-sw button { aspect-ratio: 1; border-radius: 5px; padding: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); transition: transform .1s; }
   .pk-sw button:hover { transform: scale(1.15); }
+  .pk-saved { position: relative; display: flex; }
+  .pk-saved button { width: 100%; }
+  .pk-saved i { position: absolute; right: -4px; top: -4px; width: 13px; height: 13px; border-radius: 50%; background: rgba(0,0,0,.8); display: grid; place-items: center; opacity: 0; cursor: pointer; transition: opacity .12s; }
+  .pk-saved i svg { width: 6px; height: 6px; color: #fff; }
+  .pk-saved:hover i { opacity: 1; }
+  .pk-sw .pk-add { aspect-ratio: 1; border-radius: 5px; padding: 0; display: grid; place-items: center; color: rgba(255,255,255,.8); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.3); }
+  .pk-sw .pk-add svg { width: 11px; height: 11px; }
+  .pk-sw .pk-add:hover { background: rgba(255,255,255,.1); }
   .pk-sw button[aria-pressed="true"] { box-shadow: 0 0 0 2px rgba(30,30,34,1), 0 0 0 3.5px #fff; }
   .swatch:not(.custom):hover { transform: scale(1.12); }
   .swatch { transition: transform .1s; }
@@ -761,7 +784,8 @@ const pad = (n) => String(n).padStart(2, "0");
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const COLORS = ["#e0262c", "#f1c232", "#4f8cff", "#34c27a", "#b18cff", "#ff8a3d", "#2fc6d6", "#c9c9cf"];
 // 오른쪽 배경 기본 색 12개 (저장 데이터 정리(migrate)에서도 쓰니까 맨 위에)
-// 색 고르기의 기본 색: 파스텔 12개
+// 색 고르기의 기본 색 8개 + 파스텔 12개
+const BASICS = ["#000000", "#ffffff", "#8e8e93", "#e0262c", "#ff8a3d", "#f1c232", "#34c27a", "#4f8cff"];
 const PASTELS = ["#ffd6e0", "#ffc9c9", "#ffdcc2", "#fff1b8", "#e6f7c1", "#c8f2d8", "#c5f0ee", "#cfe8ff", "#d6dcff", "#e5d9ff", "#f5d6f0", "#f0e6d6"];
 /* 새 과목 색: 기본 8색 중 안 쓴 색 → 다 쓰면 기존 색들과 가장 덜 겹치는 색을 골라요 */
 function hslHex(h, s, l) {
@@ -852,6 +876,8 @@ function migrate(raw) {
   if (!s.wallpapers.some((w) => w.id === s.wallpaper)) s.wallpaper = "b1";
   if (!s.wallPos || typeof s.wallPos !== "object") s.wallPos = {};
   if (!Array.isArray(s.settings.bgCustom)) s.settings.bgCustom = [];
+  { const st = s.settings; st.bgCustom = st.bgCustom.filter((c) => /^#[0-9a-f]{6}$/i.test(c)).map((c) => c.toLowerCase());   // 저장한 색(내 색)
+    if (st.bgColor && !st.bgCustom.includes(st.bgColor)) st.bgCustom = [...st.bgCustom, st.bgColor].slice(-16); }   // 쓰던 배경 색은 저장한 색으로
   s.settings.bgClear = Math.min(0.9, Math.max(0, Number(s.settings.bgClear) || 0));
   if (!['auto', 'light', 'dark'].includes(s.settings.ink)) s.settings.ink = 'auto';
   return s;
@@ -1617,10 +1643,14 @@ $("#sheetBody").addEventListener("click", (e) => {
   else if (t.dataset.adjustpos !== undefined) startAdjust();
   else if (t.dataset.bgc !== undefined) { state.settings.bgColor = t.dataset.bgc; applyBgColor(); markSwatch(); save(); }
   else if (t.dataset.ink) { state.settings.ink = t.dataset.ink; applyInk(); markSwatch(); save(); }
+  else if (t.dataset.bgsave !== undefined) {
+    const s = state.settings;
+    if (s.bgColor && !s.bgCustom.includes(s.bgColor)) s.bgCustom = [...s.bgCustom, s.bgColor].slice(-16);
+    markSwatch(); save();
+  }
   else if (t.dataset.bgdel) {
     const s = state.settings;
     s.bgCustom = s.bgCustom.filter((x) => x !== t.dataset.bgdel);
-    if (s.bgColor === t.dataset.bgdel) s.bgColor = "";
     applyBgColor(); markSwatch(); save();
   }
 });
@@ -1631,7 +1661,11 @@ function bgColorsHTML() {
   return `<div class="bg-row"><span class="hint">오른쪽 배경</span>
       <button class="swatch bg-pick photo" data-bgc="" aria-pressed="${!c}" title="사진" aria-label="사진"></button>
       <button class="swatch bg-pick ${c ? "" : "empty"}" id="bgPick" aria-pressed="${!!c}" style="${c ? `background:${c}` : ""}" title="색 고르기" aria-label="색 고르기"></button>
-      <span class="hint">${c ? c.toUpperCase() : "사진 · 또는 색을 눌러 고르기"}</span></div>
+      <span class="hint">${c ? c.toUpperCase() : "색을 눌러 고르기"}</span></div>
+    <div class="bg-row"><span class="hint">저장한 색</span>
+      ${state.settings.bgCustom.map((col) => `<span class="swatch-wrap"><button class="swatch" data-bgc="${col}" style="background:${col}" aria-pressed="${c === col}" aria-label="${col}" title="${col.toUpperCase()}"></button><button class="swatch-del" data-bgdel="${col}" aria-label="${col} 지우기">${X_ICON}</button></span>`).join("")}
+      <button class="swatch custom" data-bgsave ${c && !state.settings.bgCustom.includes(c) ? "" : "disabled"} title="지금 배경 색 저장" aria-label="지금 배경 색 저장"><span>${PLUS_ICON}</span></button>
+      ${state.settings.bgCustom.length ? "" : `<span class="hint">색을 고른 뒤 + 로 저장해 두면 다시 쓸 수 있어요</span>`}</div>
     <div class="bg-row"><span class="hint">글씨 색</span>
       <div class="seg" role="tablist" aria-label="글씨 색">
         ${[["auto", "자동"], ["light", "흰 글씨"], ["dark", "검정 글씨"]].map(([v, l]) => `<button role="tab" data-ink="${v}" aria-selected="${ink === v}">${l}</button>`).join("")}
@@ -1670,13 +1704,14 @@ function hsvToHex(h, s, v) {
 }
 let colorPop = null;   // { anchor, pick, h, s, v, start }
 function colorPopHTML() {
-  const recent = state.settings.bgCustom.filter((c) => !PASTELS.includes(c)).slice(-8).reverse();
-  const sw = (c) => `<button data-cp="${c}" style="background:${c}" aria-label="${c}"></button>`;
+  const saved = state.settings.bgCustom;
+  const sw = (c) => `<button data-cp="${c}" style="background:${c}" aria-label="${c}" title="${c.toUpperCase()}"></button>`;
   return `<div class="pk-sv" id="pkSv"><span class="pk-knob" id="pkSvK"></span></div>
     <div class="pk-hue" id="pkHue"><span class="pk-knob" id="pkHueK"></span></div>
     <div class="pk-row"><span class="pk-prev" id="pkPrev"></span><label class="pk-hexbox">#<input class="pk-hex" id="pkHex" maxlength="7" spellcheck="false"></label></div>
+    <div class="pk-label">기본 색</div><div class="pk-sw">${BASICS.map(sw).join("")}</div>
     <div class="pk-label">파스텔</div><div class="pk-sw">${PASTELS.map(sw).join("")}</div>
-    ${recent.length ? `<div class="pk-label">최근 색</div><div class="pk-sw">${recent.map(sw).join("")}</div>` : ""}`;
+    <div class="pk-label">저장한 색</div><div class="pk-sw" id="pkSaved">${saved.map((c) => `<span class="pk-saved">${sw(c)}<i data-cpdel="${c}" title="지우기">${X_ICON}</i></span>`).join("")}<button class="pk-add" data-cpadd title="지금 색 저장" aria-label="지금 색 저장">${PLUS_ICON}</button></div>`;
 }
 function paintColorPop(fromHex) {
   const p = colorPop; if (!p) return;
@@ -1733,14 +1768,27 @@ function closeColorPop() {
   m.hidden = true; m.innerHTML = "";
   if (!p) return;
   const col = hsvToHex(p.h, p.s, p.v);
-  const st = state.settings;                    // 고른 색은 '최근 색'에 남겨요
-  if (col !== p.start && !PASTELS.includes(col)) st.bgCustom = [...st.bgCustom.filter((c) => c !== col), col].slice(-8);
   p.pick(col, true);
 }
 $("#colorPop").addEventListener("click", (e) => {
+  const st = state.settings;
+  const del = e.target.closest("[data-cpdel]");
+  if (del) { st.bgCustom = st.bgCustom.filter((c) => c !== del.dataset.cpdel); refreshSaved(); return; }
+  if (e.target.closest("[data-cpadd]") && colorPop) {
+    const col = hsvToHex(colorPop.h, colorPop.s, colorPop.v);
+    if (!st.bgCustom.includes(col)) st.bgCustom = [...st.bgCustom, col].slice(-16);
+    refreshSaved(); return;
+  }
   const b = e.target.closest("[data-cp]");
   if (b) setColorPop(b.dataset.cp);
 });
+function refreshSaved() {                       // 저장한 색 줄만 다시 그리기(설정 창의 줄도 같이)
+  const box = $("#pkSaved"); if (!box || !colorPop) return;
+  const tmp = document.createElement("div"); tmp.innerHTML = colorPopHTML();
+  box.innerHTML = tmp.querySelector("#pkSaved").innerHTML;
+  paintColorPop(); save();
+  if (sheetRender === renderWalls) { const keep = colorPop.anchor.id; markSwatch(); if (keep === "bgPick") colorPop.anchor = $("#bgPick"); }
+}
 document.addEventListener("mousedown", (e) => {
   if (colorPop && !e.target.closest("#colorPop") && !colorPop.anchor.contains(e.target)) {
     closeColorPop();
