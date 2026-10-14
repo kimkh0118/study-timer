@@ -865,6 +865,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    /// 앱으로 돌아오면 Dock의 빨간 "!" 표시를 꺼요(타이머가 끝난 뒤 다시 시작하지 않았을 때 켜져 있어요).
+    func applicationDidBecomeActive(_ notification: Notification) {
+        bridge.web?.evaluateJavaScript("window.__appActivated && window.__appActivated()")
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         NSApp.dockTile.badgeLabel = nil
         if let nf = bridge.normalFrame { window.setFrame(nf, display: false) }   // 다음에 켤 땐 원래 크기로

@@ -1023,6 +1023,7 @@ function plannedSec() {
 
 function start() {
   hideAlert();
+  waitingBack = false;                         // 다시 시작했으니 Dock 빨간 표시 끄기
   if (!run) run = { phase: "focus", target: plannedSec(), before: 0, startedAt: null, sessionStart: Date.now(), subject: state.settings.subject };
   run.startedAt = Date.now();
   scheduleAlarm();
@@ -1152,8 +1153,16 @@ function chooseAlarm() {
   return specForPick(s.alarmPick);
 }
 
+/* 끝난 뒤 다시 시작하거나 앱으로 돌아오기 전까지 Dock 아이콘에 빨간 표시(!) */
+let waitingBack = false;
+function clearWaiting() { if (waitingBack) { waitingBack = false; renderLive(); } }
+window.__appActivated = clearWaiting;            // 앱을 앞으로 가져오면(Dock 클릭 · 창 클릭 등)
+document.addEventListener("mousedown", clearWaiting, true);
+document.addEventListener("keydown", clearWaiting, true);
+
 function notify(kind, title, body, actions) {
   const s = state.settings;
+  waitingBack = true;
   const sound = chooseAlarm();
   const w = currentWall();
   $("#ring").classList.remove("flash"); void $("#ring").offsetWidth; $("#ring").classList.add("flash");
@@ -1374,7 +1383,7 @@ function renderLive() {
   if (run) {
     const sec = run.target != null ? Math.max(0, run.target - e) : e;
     badge = run.startedAt ? String(Math.max(1, Math.ceil(sec / 60))) : "II";
-  }
+  } else if (waitingBack) badge = "!";
   if (badge !== lastBadge) { lastBadge = badge; post("badge", { text: badge }); }
   const sec = Math.floor(Date.now() / 1000);
   if (sec !== lastStatsSec) { lastStatsSec = sec; renderStats(); }
