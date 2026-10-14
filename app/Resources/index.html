@@ -60,37 +60,8 @@
   .dim { background: #000; opacity: calc(var(--dim-amount, .15) * var(--bg-alpha, 1)); }
   .app.solid-bg .bg-blur { display: none; }
   .bg-colors { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
-  .theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 10px 8px; }
-  .theme-wrap { position: relative; display: flex; }
-  .theme { position: relative; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer; border-radius: 12px; padding: 0; }
-  .theme-prev { width: 100%; height: 44px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; font-size: 13px; line-height: 1; font-variant-numeric: tabular-nums;
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); transition: transform .12s, box-shadow .12s; }
-  .theme-prev.photo { background: linear-gradient(135deg, #8a6a5a, #3a3a52); color: #fff; }
-  .theme-prev.more { background: rgba(255,255,255,.1); color: var(--text); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.3); }
-  .theme-prev.more svg { width: 16px; height: 16px; }
-  .theme:hover .theme-prev { transform: translateY(-2px); }
-  .theme[aria-pressed="true"] .theme-prev { box-shadow: 0 0 0 2.5px #fff, 0 0 0 4px rgba(0,0,0,.35); }
-  .theme[aria-pressed="true"]::after { content: ""; position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%;
-    background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23111' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/12px no-repeat; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
-  .theme-name { font-size: 11.5px; color: var(--dim); white-space: nowrap; }
-  .theme[aria-pressed="true"] .theme-name { color: var(--text); font-weight: 700; }
-  .theme input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; border: 0; padding: 0; cursor: pointer; }
-  .theme-wrap .swatch-del { right: -6px; top: -6px; z-index: 1; }
-  .theme-wrap:hover .swatch-del { opacity: 1; }
-  .bg-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-  .bg-row > .hint { width: 92px; flex: none; }
-  .bg-row .seg button { height: 28px; padding: 0 12px; }
-  .bg-colors .swatch { width: 26px; height: 26px; }
-  .swatch { width: 28px; height: 28px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); flex: none; position: relative; overflow: hidden; }
-  .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px #fff; }
-  .swatch.photo { background: linear-gradient(135deg, #8a6a5a, #3a3a52); }
-  .swatch.custom { background: rgba(255,255,255,.12); display: grid; place-items: center; cursor: pointer; }
-  .swatch.custom span svg { width: 12px; height: 12px; }
-  .swatch.custom span { display: grid; place-items: center; pointer-events: none; }
-  .swatch-wrap { position: relative; display: inline-flex; }
-  .swatch-del { position: absolute; right: -5px; top: -5px; width: 16px; height: 16px; border-radius: 50%; background: rgba(0,0,0,.75); display: grid; place-items: center; opacity: 0; transition: opacity .15s; }
-  .swatch-del svg { width: 7px; height: 7px; }
-  .swatch-wrap:hover .swatch-del { opacity: 1; }
+  .bg-pick { width: 34px; height: 34px; }
+  .bg-pick.empty { background: conic-gradient(from 90deg, #ffd6e0, #fff1b8, #c8f2d8, #cfe8ff, #e5d9ff, #ffd6e0); }
 
   .art { position: relative; margin: 0; height: 100vh; overflow: hidden; }
   /* 사진과 오른쪽 화면을 깔끔하게 나눠요(흐리게 섞으면 밝은 사진에서 경계가 지저분해 보였어요) */
@@ -180,22 +151,31 @@
     box-shadow: 0 12px 40px rgba(0,0,0,.45), inset 0 0 0 .5px rgba(255,255,255,.2); animation: rise .18s ease;
   }
   .subj-menu[hidden] { display: none; }
-  /* 과목 색 고르기: 큰 색 칩(고른 색에 체크) + 직접 고르기 */
+  /* 색 고르기(피그마식): 채도·밝기 사각형 + 색상 막대 + HEX + 파스텔 · 최근 색 */
   .color-pop {
-    position: fixed; z-index: 40; padding: 12px 14px 14px; border-radius: 18px; width: 298px;
-    background: rgba(28,28,32,.95); -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px); color: #f5f5f7;
-    box-shadow: 0 12px 36px rgba(0,0,0,.45), inset 0 0 0 .5px rgba(255,255,255,.22); animation: rise .16s ease;
+    position: fixed; z-index: 40; width: 244px; padding: 12px; border-radius: 14px;
+    background: rgba(30,30,34,.97); -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px); color: #f5f5f7;
+    box-shadow: 0 14px 40px rgba(0,0,0,.5), inset 0 0 0 .5px rgba(255,255,255,.2); animation: rise .14s ease; user-select: none;
   }
   .color-pop[hidden] { display: none; }
-  .cp-head { font-size: 12px; font-weight: 700; color: rgba(255,255,255,.7); margin-bottom: 10px; }
-  .cp-chips { display: grid; grid-template-columns: repeat(7, 30px); gap: 10px; justify-content: space-between; }
-  .chipc { position: relative; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: transparent; cursor: pointer;
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); transition: transform .1s; padding: 0; }
-  .chipc:hover { transform: scale(1.1); }
-  .chipc svg { width: 15px; height: 15px; }
-  .chipc[aria-pressed="true"] { color: var(--ck, #fff); box-shadow: 0 0 0 2px rgba(28,28,32,1), 0 0 0 4px #fff; }
-  .chipc.more { background: rgba(255,255,255,.12); color: #fff; }
-  .chipc.more input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; border: 0; padding: 0; cursor: pointer; }
+  .pk-sv { position: relative; height: 150px; border-radius: 8px; cursor: crosshair; touch-action: none;
+    background-image: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent); }
+  .pk-hue { position: relative; height: 12px; margin-top: 12px; border-radius: 6px; cursor: pointer; touch-action: none;
+    background: linear-gradient(to right, #f00, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00); }
+  .pk-knob { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; pointer-events: none;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(0,0,0,.35), inset 0 0 0 1px rgba(0,0,0,.2); }
+  .pk-hue .pk-knob { top: 50%; background: transparent; }
+  .pk-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .pk-prev { width: 26px; height: 26px; border-radius: 6px; flex: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
+  .pk-hexbox { flex: 1; display: flex; align-items: center; height: 28px; padding: 0 8px; border-radius: 6px; background: rgba(255,255,255,.08);
+    font: 500 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: rgba(255,255,255,.5); }
+  .pk-hexbox:focus-within { box-shadow: inset 0 0 0 1.5px #4f8cff; }
+  .pk-hex { flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: #fff; font: inherit; text-transform: uppercase; padding: 0 0 0 2px; }
+  .pk-label { margin: 12px 0 6px; font-size: 11px; color: rgba(255,255,255,.55); }
+  .pk-sw { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+  .pk-sw button { aspect-ratio: 1; border-radius: 5px; padding: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); transition: transform .1s; }
+  .pk-sw button:hover { transform: scale(1.15); }
+  .pk-sw button[aria-pressed="true"] { box-shadow: 0 0 0 2px rgba(30,30,34,1), 0 0 0 3.5px #fff; }
   .swatch:not(.custom):hover { transform: scale(1.12); }
   .swatch { transition: transform .1s; }
   .swatch.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: 0; padding: 0; }
@@ -268,16 +248,21 @@
 
   .week-head { display: flex; justify-content: space-between; align-items: baseline; }
   .streak { font-size: 12px; color: var(--dim); }
-  .bars { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; align-items: end; margin-top: 10px; min-height: 60px; }
-  .bar-col { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
-  .bar-col .b { width: 100%; max-width: 26px; border-radius: 6px; background: rgba(255,255,255,.14); min-height: 3px; transition: height .4s;
-    display: flex; flex-direction: column-reverse; overflow: hidden; }
-  .bar-col .b i { display: block; width: 100%; flex: none; }
-  .bar-col .b i + i { box-shadow: 0 1px 0 rgba(0,0,0,.18); }
-  .bar-col:not(.today) .b { opacity: .82; }
-  .bar-col.met span::after { content: "★"; margin-left: 1px; color: var(--tag); font-size: 9px; vertical-align: 1px; }
-  .bar-col span { font-size: 11px; color: var(--faint); }
-  .bar-col.today span { color: var(--text); font-weight: 700; }
+  /* 이번 주: 한 가지 색 막대(오늘만 진하게) + 목표 점선. 막대 위에 마우스를 올리면 날짜·시간 */
+  .bars { position: relative; flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-top: 12px; min-height: 60px; }
+  .bar-col { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; min-height: 0; }
+  .bar-col .track { position: relative; flex: 1; width: 100%; max-width: 22px; border-radius: 6px; background: rgba(255,255,255,.07); display: flex; align-items: flex-end; overflow: hidden; }
+  .bar-col .b { width: 100%; border-radius: 6px; background: #f08a8d; background: color-mix(in srgb, var(--pin) 55%, #fff); transition: height .4s, filter .2s; }
+  .bar-col.today .b { background: var(--pin); }
+  .bar-col.empty .b { display: none; }
+  .bar-col:hover .b { filter: brightness(1.08); }
+  .bar-col > span { height: 14px; line-height: 14px; font-size: 11px; color: var(--faint); }
+  .bar-col.today > span { color: var(--text); font-weight: 700; }
+  .bar-col .tip { position: absolute; left: 50%; bottom: calc(100% - 14px); transform: translate(-50%, 4px); padding: 4px 8px; border-radius: 7px; white-space: nowrap;
+    background: rgba(20,20,24,.92); color: #fff; font-size: 11px; opacity: 0; pointer-events: none; transition: opacity .12s, transform .12s; z-index: 2; }
+  .bar-col:hover .tip { opacity: 1; transform: translate(-50%, 0); }
+  .goal-line { position: absolute; left: -2px; right: -2px; height: 0; border-top: 1.5px dashed rgba(255,255,255,.32); pointer-events: none; }
+  .goal-line span { position: absolute; right: 0; top: -15px; font-size: 10px; color: var(--faint); }
 
   /* ───────── 시트(달력·배경·설정) ───────── */
   .sheet-wrap { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: rgba(0,0,0,.35); }
@@ -534,7 +519,8 @@
   .app.ink-dark .ring[data-phase="break"] .bar { stroke: rgba(0,0,0,.72); }
   .app.ink-dark .dots i, .app.ink-dark .meter, .app.ink-dark .mini-bar { background: rgba(0,0,0,.12); }
   .app.ink-dark .stack { background: rgba(0,0,0,.08); }
-  .app.ink-dark .bar-col .b { background: rgba(0,0,0,.1); }
+  .app.ink-dark .bar-col .track { background: rgba(0,0,0,.07); }
+  .app.ink-dark .goal-line { border-top-color: rgba(0,0,0,.3); }
   .app.ink-dark .mini-bar.break i { background: rgba(0,0,0,.7); }
 
   /* ───────── 간소화 ───────── */
@@ -782,10 +768,8 @@ const pad = (n) => String(n).padStart(2, "0");
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const COLORS = ["#e0262c", "#f1c232", "#4f8cff", "#34c27a", "#b18cff", "#ff8a3d", "#2fc6d6", "#c9c9cf"];
 // 오른쪽 배경 기본 색 12개 (저장 데이터 정리(migrate)에서도 쓰니까 맨 위에)
-// 오른쪽 배경 테마(카톡 테마처럼 미리 보기 카드로 골라요). 밝은 테마는 글씨가 자동으로 검게
-const BG_THEMES = [["#1c1c1e", "블랙"], ["#3a3a3c", "차콜"], ["#1e3a8a", "네이비"], ["#2563eb", "블루"], ["#059669", "그린"], ["#9333ea", "퍼플"],
-  ["#dc2626", "레드"], ["#ea580c", "오렌지"], ["#fce7f3", "핑크"], ["#dbeafe", "하늘"], ["#d1fae5", "민트"], ["#fef9c3", "레몬"], ["#f2f2f7", "화이트"]];
-const BG_COLORS = BG_THEMES.map(([c]) => c);
+// 색 고르기의 기본 색: 파스텔 12개
+const PASTELS = ["#ffd6e0", "#ffc9c9", "#ffdcc2", "#fff1b8", "#e6f7c1", "#c8f2d8", "#c5f0ee", "#cfe8ff", "#d6dcff", "#e5d9ff", "#f5d6f0", "#f0e6d6"];
 /* 새 과목 색: 기본 8색 중 안 쓴 색 → 다 쓰면 기존 색들과 가장 덜 겹치는 색을 골라요 */
 function hslHex(h, s, l) {
   s /= 100; l /= 100;
@@ -875,7 +859,6 @@ function migrate(raw) {
   if (!s.wallpapers.some((w) => w.id === s.wallpaper)) s.wallpaper = "b1";
   if (!s.wallPos || typeof s.wallPos !== "object") s.wallPos = {};
   if (!Array.isArray(s.settings.bgCustom)) s.settings.bgCustom = [];
-  { const st = s.settings; if (st.bgColor && !BG_COLORS.includes(st.bgColor) && !st.bgCustom.includes(st.bgColor)) st.bgCustom = [...st.bgCustom, st.bgColor].slice(-6); }   // 예전 팔레트에서 고른 색은 내 색으로
   s.settings.bgClear = Math.min(0.9, Math.max(0, Number(s.settings.bgClear) || 0));
   if (!['auto', 'light', 'dark'].includes(s.settings.ink)) s.settings.ink = 'auto';
   return s;
@@ -1181,7 +1164,6 @@ function applyWallpaper() {
 /* 오른쪽 배경 색: ""면 사진을 흐리게 깔고, 색을 고르면 그 색으로 */
 // 오른쪽 배경 기본 색 12개(어두운 색 · 선명한 색 · 밝은 색). 밝은 색이면 글씨가 자동으로 검게. 더 필요하면 + 로 직접
 // 과목 색 고르기에서 보여 줄 색 12개
-const SUBJ_COLORS = [...COLORS.slice(0, 7), "#ff5fa2", "#8bc34a", "#5b5bd6", "#a0522d", "#c9c9cf"];
 /* 글씨 색: 자동이면 오른쪽 배경이 밝을 때 검정 글씨로 */
 function lumOf(hex) {
   const m = toHex(hex).slice(1); const ch = [0, 2, 4].map((i) => parseInt(m.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
@@ -1323,15 +1305,13 @@ function renderStats() {
   const d0 = new Date(); d0.setHours(0, 0, 0, 0); d0.setDate(d0.getDate() - d0.getDay());
   const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(d0); d.setDate(d0.getDate() + i); return d; });
   const vals = days.map((d) => totals[dayKey(d)] || 0);
-  const max = Math.max(goal, ...vals);
+  const max = Math.max(goal * 1.15, ...vals, 1);
   $("#weekVal").textContent = fmtDur(vals.reduce((a, b) => a + b, 0));
   $("#bars").innerHTML = days.map((d, i) => {
-    const k = dayKey(d);
-    const cls = [k === todayK ? "today" : "", vals[i] >= goal ? "met" : ""].join(" ");
-    // 과목 색으로 쌓아서 보여 줘요(아래부터 많이 한 과목)
-    const segs = vals[i] ? subjectTotals(k).map(([id, sec]) => `<i style="height:${(sec / vals[i]) * 100}%;background:${subjectOf(id).color}"></i>`).join("") : "";
-    return `<div class="bar-col ${cls}" title="${d.getMonth() + 1}월 ${d.getDate()}일 ${fmtDur(vals[i])}"><div class="b" style="height:${Math.max(3, (vals[i] / max) * 100)}%">${segs}</div><span>${DAYS[i]}</span></div>`;
-  }).join("");
+    const k = dayKey(d), cls = [k === todayK ? "today" : "", vals[i] ? "" : "empty"].join(" ");
+    return `<div class="bar-col ${cls}"><div class="track"><div class="b" style="height:${(vals[i] / max) * 100}%"></div></div><span>${DAYS[i]}</span>
+      <div class="tip">${d.getMonth() + 1}/${d.getDate()} · ${vals[i] ? fmtDur(vals[i]) : "기록 없음"}</div></div>`;
+  }).join("") + (goal ? `<div class="goal-line" style="bottom:calc(20px + (100% - 20px) * ${goal / max})"><span>목표</span></div>` : "");
   const st = streakDays(totals);
   $("#streak").textContent = st ? `${st}일 연속` : "";
 }
@@ -1653,21 +1633,13 @@ $("#sheetBody").addEventListener("click", (e) => {
   }
 });
 
-/* 오른쪽 배경: 테마 카드(사진 · 기본 테마 · 내 색 · 직접 고르기) + 글씨 색 */
+/* 오른쪽 배경: 사진 / 색(누르면 색 고르기) + 글씨 색 */
 function bgColorsHTML() {
   const c = state.settings.bgColor, ink = state.settings.ink || "auto";
-  const card = (col, name, mine) => {
-    const dark = lumOf(col) > 0.36;
-    return `<span class="theme-wrap"><button class="theme" data-bgc="${col}" aria-pressed="${c === col}" aria-label="${name}">
-        <span class="theme-prev" style="background:${col};color:${dark ? "#111" : "#fff"}">25:00</span><span class="theme-name">${name}</span></button>
-      ${mine ? `<button class="swatch-del" data-bgdel="${col}" aria-label="${name} 지우기">${X_ICON}</button>` : ""}</span>`;
-  };
-  return `<div class="theme-grid">
-      <span class="theme-wrap"><button class="theme" data-bgc="" aria-pressed="${!c}" aria-label="사진"><span class="theme-prev photo">25:00</span><span class="theme-name">사진</span></button></span>
-      ${BG_THEMES.map(([col, name]) => card(col, name, false)).join("")}
-      ${state.settings.bgCustom.map((col) => card(col, "내 색", true)).join("")}
-      <span class="theme-wrap"><label class="theme" title="다른 색 고르기"><span class="theme-prev more">${PLUS_ICON}</span><span class="theme-name">직접 고르기</span><input type="color" id="bgPick" value="${c || "#3b82f6"}"></label></span>
-    </div>
+  return `<div class="bg-row"><span class="hint">오른쪽 배경</span>
+      <button class="swatch bg-pick photo" data-bgc="" aria-pressed="${!c}" title="사진" aria-label="사진"></button>
+      <button class="swatch bg-pick ${c ? "" : "empty"}" id="bgPick" aria-pressed="${!!c}" style="${c ? `background:${c}` : ""}" title="색 고르기" aria-label="색 고르기"></button>
+      <span class="hint">${c ? c.toUpperCase() : "사진 · 또는 색을 눌러 고르기"}</span></div>
     <div class="bg-row"><span class="hint">글씨 색</span>
       <div class="seg" role="tablist" aria-label="글씨 색">
         ${[["auto", "자동"], ["light", "흰 글씨"], ["dark", "검정 글씨"]].map(([v, l]) => `<button role="tab" data-ink="${v}" aria-selected="${ink === v}">${l}</button>`).join("")}
@@ -1682,43 +1654,100 @@ function markSwatch() {
 function bindBgPick() {
   const pick = $("#bgPick");
   if (!pick) return;
-  // + → Mac 색 고르기. 고르는 동안은 미리 보기, 다 고르면 내 색으로 추가
-  pick.oninput = (e) => { state.settings.bgColor = e.target.value; applyBgColor(); };
-  pick.onchange = (e) => {
-    const col = e.target.value.toLowerCase();
+  pick.onclick = () => {
     const s = state.settings;
-    if (!BG_COLORS.includes(col) && !s.bgCustom.includes(col)) s.bgCustom = [...s.bgCustom, col].slice(-6);
-    s.bgColor = col; applyBgColor(); save(); markSwatch();
+    openColorPop(pick, s.bgColor || "#cfe8ff", (col, done) => {
+      s.bgColor = col; applyBgColor();
+      pick.style.background = col; pick.classList.remove("empty");
+      if (pick.nextElementSibling) pick.nextElementSibling.textContent = col.toUpperCase();
+      if (done) { save(); markSwatch(); }
+    });
   };
 }
 
-/* ── 과목 색 고르기: 색 12개 한 줄 + (다른 색은 + 로 Mac 색 고르기) ── */
-let colorPop = null;   // { anchor, pick }
+/* ── 색 고르기(피그마식): 사각형에서 채도·밝기, 막대에서 색상, HEX 입력, 파스텔 · 최근 색 ── */
+function hexToHsv(hex) {
+  const [r, g, b] = hexRgb(hex).map((x) => x / 255), max = Math.max(r, g, b), d = max - Math.min(r, g, b);
+  let h = 0;
+  if (d) h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(h * 60 + 360) % 360, max ? d / max : 0, max];
+}
+function hsvToHex(h, s, v) {
+  const f = (n) => { const k = (n + h / 60) % 6; return Math.round((v - v * s * Math.max(0, Math.min(k, 4 - k, 1))) * 255).toString(16).padStart(2, "0"); };
+  return `#${f(5)}${f(3)}${f(1)}`;
+}
+let colorPop = null;   // { anchor, pick, h, s, v, start }
+function colorPopHTML() {
+  const recent = state.settings.bgCustom.filter((c) => !PASTELS.includes(c)).slice(-8).reverse();
+  const sw = (c) => `<button data-cp="${c}" style="background:${c}" aria-label="${c}"></button>`;
+  return `<div class="pk-sv" id="pkSv"><span class="pk-knob" id="pkSvK"></span></div>
+    <div class="pk-hue" id="pkHue"><span class="pk-knob" id="pkHueK"></span></div>
+    <div class="pk-row"><span class="pk-prev" id="pkPrev"></span><label class="pk-hexbox">#<input class="pk-hex" id="pkHex" maxlength="7" spellcheck="false"></label></div>
+    <div class="pk-label">파스텔</div><div class="pk-sw">${PASTELS.map(sw).join("")}</div>
+    ${recent.length ? `<div class="pk-label">최근 색</div><div class="pk-sw">${recent.map(sw).join("")}</div>` : ""}`;
+}
+function paintColorPop(fromHex) {
+  const p = colorPop; if (!p) return;
+  const col = hsvToHex(p.h, p.s, p.v);
+  $("#pkSv").style.backgroundColor = `hsl(${p.h},100%,50%)`;
+  Object.assign($("#pkSvK").style, { left: p.s * 100 + "%", top: (1 - p.v) * 100 + "%", background: col });
+  Object.assign($("#pkHueK").style, { left: (p.h / 360) * 100 + "%", background: `hsl(${p.h},100%,50%)` });
+  $("#pkPrev").style.background = col;
+  if (!fromHex) $("#pkHex").value = col.slice(1).toUpperCase();
+  $("#colorPop").querySelectorAll("[data-cp]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.cp === col));
+  return col;
+}
+function setColorPop(hex, fromHex) {
+  const p = colorPop; if (!p) return;
+  const [h, s, v] = hexToHsv(hex);
+  if (s > 0.001 && v > 0.001) p.h = h;          // 회색·검정이면 색상 막대 위치는 그대로
+  p.s = s; p.v = v;
+  p.pick(paintColorPop(fromHex), false);
+}
 function openColorPop(anchor, cur, pick) {
   if (colorPop && colorPop.anchor === anchor) { closeColorPop(); return; }   // 같은 버튼 다시 누르면 닫기
+  closeColorPop();
   cur = toHex(cur);
   const m = $("#colorPop");
-  colorPop = { anchor, pick };
-  m.innerHTML = `<div class="cp-head">과목 색</div><div class="cp-chips">`
-    + SUBJ_COLORS.map((col) => `<button class="chipc" data-cp="${col}" style="background:${col};--ck:${lumOf(col) > 0.45 ? "#111" : "#fff"}" aria-pressed="${col === cur}" aria-label="${col}">${CHECK_ICON}</button>`).join("")
-    + `<label class="chipc more" title="다른 색 고르기" aria-label="다른 색 고르기">${PLUS_ICON}<input type="color" id="cpNative" value="${cur}"></label></div>`;
+  const [h, s, v] = hexToHsv(cur);
+  colorPop = { anchor, pick, h, s, v, start: cur };
+  m.innerHTML = colorPopHTML();
   m.hidden = false;
-  const r = anchor.getBoundingClientRect(), W = innerWidth, H = innerHeight, pad = 10, w = m.offsetWidth, h = m.offsetHeight;
+  paintColorPop();
+  const r = anchor.getBoundingClientRect(), W = innerWidth, H = innerHeight, pad = 10, w = m.offsetWidth, hh = m.offsetHeight;
   m.style.left = Math.max(pad, Math.min(W - w - pad, r.left - 8)) + "px";
-  m.style.top = (r.bottom + 6 + h + pad <= H ? r.bottom + 6 : Math.max(pad, r.top - 6 - h)) + "px";
-  const nat = $("#cpNative");
-  nat.oninput = (e) => colorPop && colorPop.pick(e.target.value.toLowerCase(), false);
-  nat.onchange = (e) => { const p = colorPop; closeColorPop(); p && p.pick(e.target.value.toLowerCase(), true); };
+  m.style.top = (r.bottom + 8 + hh + pad <= H ? r.bottom + 8 : Math.max(pad, r.top - 8 - hh)) + "px";
+  const drag = (el, fn) => {
+    el.onpointerdown = (e) => {
+      el.setPointerCapture(e.pointerId);
+      const move = (ev) => { const b = el.getBoundingClientRect(); fn(Math.min(1, Math.max(0, (ev.clientX - b.left) / b.width)), Math.min(1, Math.max(0, (ev.clientY - b.top) / b.height))); colorPop && colorPop.pick(paintColorPop(), false); };
+      move(e);
+      el.onpointermove = move;
+      el.onpointerup = el.onpointercancel = () => { el.onpointermove = null; };
+    };
+  };
+  drag($("#pkSv"), (x, y) => { colorPop.s = x; colorPop.v = 1 - y; });
+  drag($("#pkHue"), (x) => { colorPop.h = Math.min(359.9, x * 360); });
+  $("#pkHex").oninput = (e) => {
+    const v = e.target.value.replace(/[^0-9a-f]/gi, "").slice(0, 6);
+    if (v.length === 6) setColorPop("#" + v.toLowerCase(), true);
+  };
+  $("#pkHex").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); closeColorPop(); } };
 }
 function closeColorPop() {
   const m = $("#colorPop");
   if (!m || m.hidden) return;
-  m.hidden = true; m.innerHTML = ""; colorPop = null;
+  const p = colorPop; colorPop = null;
+  m.hidden = true; m.innerHTML = "";
+  if (!p) return;
+  const col = hsvToHex(p.h, p.s, p.v);
+  const st = state.settings;                    // 고른 색은 '최근 색'에 남겨요
+  if (col !== p.start && !PASTELS.includes(col)) st.bgCustom = [...st.bgCustom.filter((c) => c !== col), col].slice(-8);
+  p.pick(col, true);
 }
 $("#colorPop").addEventListener("click", (e) => {
   const b = e.target.closest("[data-cp]");
-  if (!b || !colorPop) return;
-  const p = colorPop; closeColorPop(); p.pick(b.dataset.cp, true);
+  if (b) setColorPop(b.dataset.cp);
 });
 document.addEventListener("mousedown", (e) => {
   if (colorPop && !e.target.closest("#colorPop") && !colorPop.anchor.contains(e.target)) {
