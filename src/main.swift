@@ -471,16 +471,22 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             normalFrame = w.frame
             w.contentMinSize = NSSize(width: 360, height: 160)
             w.styleMask.remove(.resizable)
-            w.isMovable = false                     // 간소화 창은 오른쪽 위에 고정
+            w.isMovable = false                     // 시스템 끌기는 끄고, 끌어서 옮기기는 CTWebView가 직접 해요
             w.isMovableByWindowBackground = false
-            (web as? CTWebView)?.dragLocked = true      // 눌러서 끌어도 아무 일 없게
+            (web as? CTWebView)?.dragLocked = true      // 끌면 웹 화면 대신 창이 움직여요
+            (web as? CTWebView)?.onMoved = { p in UserDefaults.standard.set([Double(p.x), Double(p.y)], forKey: "compactOrigin") }
             w.level = .floating                     // 항상 위에
             w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]   // 데스크탑을 옮겨도 따라와요
             buttons.forEach { w.standardWindowButton($0)?.isHidden = true }
             let size = NSSize(width: 420, height: 180)
             let vf = (w.screen ?? NSScreen.main)?.visibleFrame ?? w.frame
-            w.setFrame(NSRect(x: vf.maxX - size.width - 20, y: vf.maxY - size.height - 20,
-                              width: size.width, height: size.height), display: true, animate: true)
+            var origin = NSPoint(x: vf.maxX - size.width - 20, y: vf.maxY - size.height - 20)   // 처음엔 오른쪽 위
+            // 전에 옮겨 둔 자리가 지금 화면 안에 있으면 거기로
+            if let a = UserDefaults.standard.array(forKey: "compactOrigin") as? [Double], a.count == 2 {
+                let r = NSRect(x: a[0], y: a[1], width: size.width, height: size.height)
+                if NSScreen.screens.contains(where: { $0.visibleFrame.intersects(r.insetBy(dx: 40, dy: 40)) }) { origin = r.origin }
+            }
+            w.setFrame(NSRect(origin: origin, size: size), display: true, animate: true)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.repaintWeb() }
         } else {
             guard let nf = normalFrame else { return }
@@ -673,9 +679,39 @@ final class Bridge: NSObject, WKScriptMessageHandler {
 
 // ───────── 창 맨 위를 잡고 끌 수 있는 띠 ─────────
 /// 간소화 중에는 끌기 동작을 무시하는 웹 화면(클릭은 그대로 돼요).
+/// 간소화 중에는 아무 곳이나 눌러 끌면 창이 움직여요(웹 화면에는 끌기를 넘기지 않아서 검게 변하지 않아요).
+/// 그냥 누르기만 하면 버튼이 평소처럼 눌려요.
 final class CTWebView: WKWebView {
-    var dragLocked = false
-    override func mouseDragged(with event: NSEvent) { if !dragLocked { super.mouseDragged(with: event) } }
+    var dragLocked = false                  // 간소화 모드
+    var onMoved: ((NSPoint) -> Void)?
+    private var downAt: NSPoint?
+    private var downOrigin: NSPoint?
+    private var moved = false
+
+    override func mouseDown(with event: NSEvent) {
+        if dragLocked, let w = window { downAt = NSEvent.mouseLocation; downOrigin = w.frame.origin; moved = false }
+        super.mouseDown(with: event)
+    }
+    override func mouseDragged(with event: NSEvent) {
+        guard dragLocked else { super.mouseDragged(with: event); return }
+        guard let w = window, let a = downAt, let o = downOrigin else { return }
+        let p = NSEvent.mouseLocation
+        let dx = p.x - a.x, dy = p.y - a.y
+        if !moved {
+            if hypot(dx, dy) < 4 { return }          // 살짝 흔들린 건 클릭으로
+            moved = true
+            evaluateJavaScript("window.__dragMove && window.__dragMove(true)")
+        }
+        w.setFrameOrigin(NSPoint(x: o.x + dx, y: o.y + dy))
+    }
+    override func mouseUp(with event: NSEvent) {
+        super.mouseUp(with: event)
+        if moved, let w = window {
+            evaluateJavaScript("window.__dragMove && window.__dragMove(false)")
+            onMoved?(w.frame.origin)
+        }
+        downAt = nil; downOrigin = nil; moved = false
+    }
     override var mouseDownCanMoveWindow: Bool { false }
     // 창이 뒤에 있을 때도 첫 클릭이 바로 버튼에 들어가게(창 앞으로 가져오는 데만 쓰이지 않게)
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -683,6 +719,11 @@ final class CTWebView: WKWebView {
 
 final class DragStrip: NSView {
     override var mouseDownCanMoveWindow: Bool { true }
+    // 간소화 중에는 이 띠가 클릭을 가로채지 않고 아래 화면(끌어서 옮기기)으로 넘겨요
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        if (window?.contentMinSize.width ?? 1000) < 500 { return nil }
+        return super.hitTest(point)
+    }
     override func mouseDown(with event: NSEvent) {
         let compact = (window?.contentMinSize.width ?? 1000) < 500      // 간소화 창은 두 번 눌러도 커지지 않게
         if compact { return }                                            // 간소화 창은 움직이지 않아요

@@ -2033,6 +2033,12 @@ document.addEventListener("change", (e) => {
 /* 화면 전체가 옆/아래로 밀리는 일 막기 (어떤 이유로든 창 자체가 스크롤되면 바로 제자리로) */
 window.addEventListener("scroll", () => { if (scrollX || scrollY) scrollTo(0, 0); });
 /* ════════════════ 간소화 ════════════════ */
+/* 간소화 창을 끌어서 옮기는 동안·직후에는 버튼이 눌리지 않게 (Mac 쪽에서 알려 줘요) */
+let draggingWin = false, dragEndAt = 0;
+window.__dragMove = (on) => { draggingWin = on; if (!on) dragEndAt = Date.now(); };
+document.addEventListener("click", (e) => {
+  if (compact && (draggingWin || Date.now() - dragEndAt < 250)) { e.stopPropagation(); e.preventDefault(); }
+}, true);
 // 사진·글자를 끌어서 옮기는 동작은 쓰지 않아요(간소화 창이 검게 변하던 원인)
 document.addEventListener("dragstart", (e) => e.preventDefault());
 let compact = false;
