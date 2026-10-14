@@ -188,7 +188,7 @@ if #available(macOS 13.3, *) { web.isInspectable = true }
 | `Bridge` | 웹 화면이 보내는 메시지를 받아 처리해요. 아래 표 참고. 알람용(`sound`)과 소리 크기 맞추기용(`volSound`) 재생기를 따로 가지고 있어서 서로 끊지 않아요. |
 | `CTWebView` | WKWebView를 조금 바꾼 것. 간소화 중에는 마우스로 끄는 동작을 무시해요(검은 화면 방지). |
 | `DragStrip` | 창 맨 위 30px짜리 투명한 띠. 웹 화면이 마우스를 가져가서 창을 못 끄는 문제를 막아요. 두 번 누르면 창을 키워요. 간소화 중에는 아무 일도 안 해요. |
-| `AppDelegate` | 창과 WKWebView를 만들고, 초기 데이터를 주입하고, `index.html`을 띄워요. 화면이 다 그려진 뒤 창을 부드럽게 띄우고 `__appShown()`으로 시작 모션을 알려요. 창을 옮기거나 다시 보일 때 화면을 새로 그리고, 화면 프로세스가 멈추면 다시 불러와요. |
+| `AppDelegate` | 창(투명, 뒤에 흐린 유리 `NSVisualEffectView`)과 WKWebView를 만들고, 초기 데이터를 주입하고, `index.html`을 띄워요. 화면이 다 그려진 뒤 창을 부드럽게 띄우고 `__appShown()`으로 시작 모션을 알려요. 창을 옮기거나 다시 보일 때 화면을 새로 그리고, 화면 프로세스가 멈추면 다시 불러와요. |
 | `buildMenu()` | 앱, 편집, 윈도우 메뉴. 편집 메뉴가 있어야 입력칸에서 ⌘C, ⌘V가 돼요. |
 
 ### 6-2. 실행 순서
@@ -335,7 +335,10 @@ JS chooseAlarm()  ──▶  sound 스펙 { type, name | url, title }
     "timerMin": 50,             // 타이머 방식 시간(분)
     "focusMin": 25, "breakMin": 5, "longBreakMin": 15, "longEvery": 4,
     "onTop": false,
-    "dim": 0.15,                // 배경 어둡게 0~0.7
+    "dim": 0.15,                // 1 - 배경 밝기 (0~0.7)
+    "bgColor": "",              // 오른쪽 배경 색. ""면 사진을 흐리게
+    "bgCustom": ["#ff8800"],    // 내가 추가한 색 (최대 8개)
+    "bgClear": 0,               // 배경 투명도 0~0.9
     "overlay": true,            // 맨 위 알림 창 띄우기
     "alarmMode": "single",      // "single" | "random"
     "alarmPick": "it:1440857781",  // 하나만일 때 고른 소리 (아래 소리 키)
@@ -350,6 +353,7 @@ JS chooseAlarm()  ──▶  sound 스펙 { type, name | url, title }
     { "id": "u7x…", "kind": "user", "src": "ctwp://img/8f1c….jpg", "file": "8f1c….jpg", "label": "IMG_1234" }
   ],
   "wallpaper": "b1",            // 지금 쓰는 배경 id
+  "wallPos": { "b1": "50% 30%" },  // 위치 맞추기로 정한 사진 위치 (배경 id별)
   "alarms": [                   // 내 노래 (Apple 미리 듣기)
     { "id": "it:1440857781", "kind": "it", "trackId": 1440857781, "title": "First Love", "artist": "sunny side",
       "art": "https://is1-ssl.mzstatic.com/…/300x300bb.jpg", "preview": "https://audio-ssl.itunes.apple.com/….m4a", "link": "https://music.apple.com/…" }
