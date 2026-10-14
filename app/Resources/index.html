@@ -248,21 +248,15 @@
 
   .week-head { display: flex; justify-content: space-between; align-items: baseline; }
   .streak { font-size: 12px; color: var(--dim); }
-  /* 이번 주: 한 가지 색 막대(오늘만 진하게) + 목표 점선. 막대 위에 마우스를 올리면 날짜·시간 */
-  .bars { position: relative; flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-top: 12px; min-height: 60px; }
-  .bar-col { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; min-height: 0; }
-  .bar-col .track { position: relative; flex: 1; width: 100%; max-width: 22px; border-radius: 6px; background: rgba(255,255,255,.07); display: flex; align-items: flex-end; overflow: hidden; }
-  .bar-col .b { width: 100%; border-radius: 6px; background: #f08a8d; background: color-mix(in srgb, var(--pin) 55%, #fff); transition: height .4s, filter .2s; }
+  /* 이번 주: 처음 모양 그대로, 색만 한 가지(오늘은 진하게) */
+  .bars { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; align-items: end; margin-top: 10px; min-height: 60px; }
+  .bar-col { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+  .bar-col .b { width: 100%; max-width: 26px; border-radius: 6px; min-height: 3px; transition: height .4s;
+    background: #f08a8d; background: color-mix(in srgb, var(--pin) 55%, #fff); }
+  .bar-col.empty .b { background: rgba(255,255,255,.14); }
   .bar-col.today .b { background: var(--pin); }
-  .bar-col.empty .b { display: none; }
-  .bar-col:hover .b { filter: brightness(1.08); }
-  .bar-col > span { height: 14px; line-height: 14px; font-size: 11px; color: var(--faint); }
-  .bar-col.today > span { color: var(--text); font-weight: 700; }
-  .bar-col .tip { position: absolute; left: 50%; bottom: calc(100% - 14px); transform: translate(-50%, 4px); padding: 4px 8px; border-radius: 7px; white-space: nowrap;
-    background: rgba(20,20,24,.92); color: #fff; font-size: 11px; opacity: 0; pointer-events: none; transition: opacity .12s, transform .12s; z-index: 2; }
-  .bar-col:hover .tip { opacity: 1; transform: translate(-50%, 0); }
-  .goal-line { position: absolute; left: -2px; right: -2px; height: 0; border-top: 1.5px dashed rgba(255,255,255,.32); pointer-events: none; }
-  .goal-line span { position: absolute; right: 0; top: -15px; font-size: 10px; color: var(--faint); }
+  .bar-col span { font-size: 11px; color: var(--faint); }
+  .bar-col.today span { color: var(--text); font-weight: 700; }
 
   /* ───────── 시트(달력·배경·설정) ───────── */
   .sheet-wrap { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: rgba(0,0,0,.35); }
@@ -519,8 +513,7 @@
   .app.ink-dark .ring[data-phase="break"] .bar { stroke: rgba(0,0,0,.72); }
   .app.ink-dark .dots i, .app.ink-dark .meter, .app.ink-dark .mini-bar { background: rgba(0,0,0,.12); }
   .app.ink-dark .stack { background: rgba(0,0,0,.08); }
-  .app.ink-dark .bar-col .track { background: rgba(0,0,0,.07); }
-  .app.ink-dark .goal-line { border-top-color: rgba(0,0,0,.3); }
+  .app.ink-dark .bar-col.empty .b { background: rgba(0,0,0,.12); }
   .app.ink-dark .mini-bar.break i { background: rgba(0,0,0,.7); }
 
   /* ───────── 간소화 ───────── */
@@ -1305,13 +1298,12 @@ function renderStats() {
   const d0 = new Date(); d0.setHours(0, 0, 0, 0); d0.setDate(d0.getDate() - d0.getDay());
   const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(d0); d.setDate(d0.getDate() + i); return d; });
   const vals = days.map((d) => totals[dayKey(d)] || 0);
-  const max = Math.max(goal * 1.15, ...vals, 1);
+  const max = Math.max(goal, ...vals);
   $("#weekVal").textContent = fmtDur(vals.reduce((a, b) => a + b, 0));
   $("#bars").innerHTML = days.map((d, i) => {
     const k = dayKey(d), cls = [k === todayK ? "today" : "", vals[i] ? "" : "empty"].join(" ");
-    return `<div class="bar-col ${cls}"><div class="track"><div class="b" style="height:${(vals[i] / max) * 100}%"></div></div><span>${DAYS[i]}</span>
-      <div class="tip">${d.getMonth() + 1}/${d.getDate()} · ${vals[i] ? fmtDur(vals[i]) : "기록 없음"}</div></div>`;
-  }).join("") + (goal ? `<div class="goal-line" style="bottom:calc(20px + (100% - 20px) * ${goal / max})"><span>목표</span></div>` : "");
+    return `<div class="bar-col ${cls}" title="${d.getMonth() + 1}월 ${d.getDate()}일 ${fmtDur(vals[i])}"><div class="b" style="height:${Math.max(3, (vals[i] / max) * 100)}%"></div><span>${DAYS[i]}</span></div>`;
+  }).join("");
   const st = streakDays(totals);
   $("#streak").textContent = st ? `${st}일 연속` : "";
 }
