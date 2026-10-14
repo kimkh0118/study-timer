@@ -59,8 +59,11 @@
   }
   .dim { background: #000; opacity: calc(var(--dim-amount, .15) * var(--bg-alpha, 1)); }
   .app.solid-bg .bg-blur { display: none; }
-  .bg-colors { display: flex; align-items: center; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
-  .bg-colors .hint { margin-right: 6px; }
+  .bg-colors { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .bg-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .bg-row > .hint { width: 92px; flex: none; }
+  .bg-row .seg button { height: 28px; padding: 0 12px; }
+  .bg-colors .swatch { width: 26px; height: 26px; }
   .swatch { width: 28px; height: 28px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); flex: none; position: relative; overflow: hidden; }
   .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px #fff; }
   .swatch.photo { background: linear-gradient(135deg, #8a6a5a, #3a3a52); }
@@ -474,6 +477,29 @@
   .t-rename { width: 100%; font: inherit; border: 0; border-radius: 6px; padding: 2px 4px; background: rgba(255,255,255,.14); color: #fff; outline: none; }
   .t-meta { margin: 4px 4px 0; font-size: 11px; color: var(--faint); }
 
+  /* ───────── 검정 글씨 모드 (밝은 배경색용) — 시트·알림 창은 원래대로 ───────── */
+  .app.ink-dark .main, .app.ink-dark .mini {
+    --text: #111114; --dim: rgba(0,0,0,.62); --faint: rgba(0,0,0,.44); --line: rgba(0,0,0,.12);
+    --glass: rgba(255,255,255,.42); --edge: rgba(0,0,0,.10);
+    color: var(--text);
+  }
+  .app.ink-dark .clock { color: rgba(0,0,0,.86); }
+  .app.ink-dark .glass { box-shadow: inset 0 1px 0 rgba(255,255,255,.7), inset 0 0 0 .5px var(--edge), 0 14px 34px rgba(0,0,0,.12); }
+  .app.ink-dark .seg { background: rgba(0,0,0,.07); }
+  .app.ink-dark .soft, .app.ink-dark .chip.more, .app.ink-dark .btn { background: rgba(0,0,0,.06); }
+  .app.ink-dark .tool:hover, .app.ink-dark .soft:hover:not(:disabled):not([aria-pressed="true"]) { background: rgba(0,0,0,.1); }
+  .app.ink-dark .tool[aria-pressed="true"], .app.ink-dark .seg button[aria-selected="true"],
+  .app.ink-dark .soft[aria-pressed="true"], .app.ink-dark .btn.primary, .app.ink-dark .mini-go { background: #111114; color: #fff; }
+  .app.ink-dark .btn.primary.running { background: rgba(17,17,20,.82); }
+  .app.ink-dark .chip[aria-pressed="true"] { background: rgba(255,255,255,.62); }
+  .app.ink-dark .adjust .stepper .soft:last-child { border-left-color: rgba(0,0,0,.08); }
+  .app.ink-dark .ring .track { stroke: rgba(0,0,0,.12); }
+  .app.ink-dark .ring[data-phase="break"] .bar { stroke: rgba(0,0,0,.72); }
+  .app.ink-dark .dots i, .app.ink-dark .meter, .app.ink-dark .mini-bar { background: rgba(0,0,0,.12); }
+  .app.ink-dark .stack { background: rgba(0,0,0,.08); }
+  .app.ink-dark .bar-col .b { background: rgba(0,0,0,.2); }
+  .app.ink-dark .mini-bar.break i { background: rgba(0,0,0,.7); }
+
   /* ───────── 간소화 ───────── */
   .mini { display: none; }
   /* 간소화 창도 큰 창과 같은 배경(사진 흐림 또는 고른 색 · 밝기 · 투명도)을 그대로 써요 */
@@ -763,7 +789,7 @@ function defaults() {
     settings: {
       goalMin: 240, timerMin: 50,
       focusMin: 25, breakMin: 5, longBreakMin: 15, longEvery: 4,
-      sound: true, onTop: false, dim: 0.15, bgColor: "", bgCustom: [], bgClear: 0,
+      sound: true, onTop: false, dim: 0.15, bgColor: "", bgCustom: [], bgClear: 0, ink: "auto",
       overlay: true, alarmMode: "single", alarmPick: "b:morning", alarmSet: [], volume: 0.8, maxSec: 30,
       mode: "timer", subject: subjects[0].id,
     },
@@ -807,6 +833,7 @@ function migrate(raw) {
   if (!s.wallPos || typeof s.wallPos !== "object") s.wallPos = {};
   if (!Array.isArray(s.settings.bgCustom)) s.settings.bgCustom = [];
   s.settings.bgClear = Math.min(0.9, Math.max(0, Number(s.settings.bgClear) || 0));
+  if (!['auto', 'light', 'dark'].includes(s.settings.ink)) s.settings.ink = 'auto';
   return s;
 }
 
@@ -1108,13 +1135,34 @@ function applyWallpaper() {
   if ($("#miniImg")) { $("#miniImg").src = w.src; $("#miniImg").style.objectPosition = posOf(w); }
 }
 /* 오른쪽 배경 색: ""면 사진을 흐리게 깔고, 색을 고르면 그 색으로 */
-// 흰 글씨가 잘 보이는 선명한 색들
-const BG_COLORS = ["#000000", "#1f2937", "#1e3a8a", "#2563eb", "#0e7490", "#15803d", "#7c3aed", "#be185d", "#b91c1c", "#c2410c"];
+// 오른쪽 배경 기본 색: 무채색 · 진한 색 · 선명한 색 · 밝은 파스텔 (밝은 색이면 글씨가 자동으로 검게)
+const BG_PALETTE = [
+  ["무채색", ["#000000", "#1c1c1e", "#2c2c2e", "#3a3a3c", "#636366", "#8e8e93", "#c7c7cc", "#e5e5ea", "#f2f2f7", "#ffffff"]],
+  ["진한 색", ["#0b1d3a", "#1e3a8a", "#134e4a", "#14532d", "#3f2a14", "#4c1d1d", "#4a044e", "#2e1065", "#3b0764", "#1f2937"]],
+  ["선명한 색", ["#2563eb", "#0284c7", "#0e7490", "#059669", "#15803d", "#65a30d", "#ca8a04", "#ea580c", "#dc2626", "#db2777", "#9333ea", "#4f46e5"]],
+  ["파스텔", ["#dbeafe", "#cffafe", "#ccfbf1", "#dcfce7", "#ecfccb", "#fef9c3", "#ffedd5", "#fee2e2", "#fce7f3", "#f3e8ff", "#e0e7ff", "#f5e6c8"]],
+];
+const BG_COLORS = BG_PALETTE.flatMap(([, cols]) => cols);
+/* 글씨 색: 자동이면 오른쪽 배경이 밝을 때 검정 글씨로 */
+function lumOf(hex) {
+  const m = toHex(hex).slice(1); const ch = [0, 2, 4].map((i) => parseInt(m.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+function inkIsDark() {
+  const s = state.settings, ink = s.ink || "auto";
+  if (ink !== "auto") return ink === "dark";
+  if (!s.bgColor) return false;                                  // 사진 흐림 배경은 어둡게 깔려서 흰 글씨
+  const alpha = 1 - (s.bgClear || 0);
+  const eff = lumOf(s.bgColor) * (1 - s.dim * alpha);           // 밝기 막대로 어두워진 만큼
+  return alpha > 0.35 && eff > 0.36;
+}
+function applyInk() { app.classList.toggle("ink-dark", inkIsDark()); }
 function applyBgColor() {
   const c = state.settings.bgColor;
   app.classList.toggle("solid-bg", !!c);
   $("#bgSolid").style.backgroundColor = c || "";
   app.style.setProperty("--bg-alpha", 1 - (state.settings.bgClear || 0));
+  applyInk();
 }
 let artAspect = 0.6;
 /* 사진 비율과 상관없이 왼쪽 사진 영역은 늘 같은 폭이에요(배치가 흔들리지 않게). */
@@ -1523,7 +1571,7 @@ function renderWalls() {
     $("#clearVal").textContent = `${e.target.value}%`;
     applyBgColor(); save();
   };
-  $("#dimRange").oninput = (e) => { state.settings.dim = Math.round((1 - Number(e.target.value) / 100) * 100) / 100; app.style.setProperty("--dim-amount", state.settings.dim); save(); };
+  $("#dimRange").oninput = (e) => { state.settings.dim = Math.round((1 - Number(e.target.value) / 100) * 100) / 100; applyInk(); app.style.setProperty("--dim-amount", state.settings.dim); save(); };
 }
 function addWallpapers(items) {
   if (!items || !items.length) return;
@@ -1554,6 +1602,7 @@ $("#sheetBody").addEventListener("click", (e) => {
   } else if (t.dataset.add !== undefined) post("pickWallpapers");
   else if (t.dataset.adjustpos !== undefined) startAdjust();
   else if (t.dataset.bgc !== undefined) { state.settings.bgColor = t.dataset.bgc; applyBgColor(); markSwatch(); save(); }
+  else if (t.dataset.ink) { state.settings.ink = t.dataset.ink; applyInk(); markSwatch(); save(); }
   else if (t.dataset.bgdel) {
     const s = state.settings;
     s.bgCustom = s.bgCustom.filter((x) => x !== t.dataset.bgdel);
@@ -1564,13 +1613,17 @@ $("#sheetBody").addEventListener("click", (e) => {
 
 /* 오른쪽 배경 색 줄: 사진에서 · 기본 색 · 내가 추가한 색 · + (색 추가) */
 function bgColorsHTML() {
-  const c = state.settings.bgColor;
+  const c = state.settings.bgColor, ink = state.settings.ink || "auto";
   const sw = (col, mine) => `<span class="swatch-wrap"><button class="swatch" data-bgc="${col}" style="background:${col}" aria-pressed="${c === col}" aria-label="${col}"></button>${mine ? `<button class="swatch-del" data-bgdel="${col}" aria-label="${col} 지우기">${X_ICON}</button>` : ""}</span>`;
-  return `<span class="hint">오른쪽 배경 색</span>
-    <button class="swatch photo" data-bgc="" aria-pressed="${!c}" title="사진에서" aria-label="사진에서"></button>
-    ${BG_COLORS.map((col) => sw(col, false)).join("")}
-    ${state.settings.bgCustom.map((col) => sw(col, true)).join("")}
-    <label class="swatch custom" title="색 추가" aria-label="색 추가"><span>${PLUS_ICON}</span><input type="color" id="bgPick" value="${c || "#3b82f6"}"></label>`;
+  return `<div class="bg-row"><span class="hint">글씨 색</span>
+      <div class="seg" role="tablist" aria-label="글씨 색">
+        ${[["auto", "자동"], ["light", "흰 글씨"], ["dark", "검정 글씨"]].map(([v, l]) => `<button role="tab" data-ink="${v}" aria-selected="${ink === v}">${l}</button>`).join("")}
+      </div></div>
+    <div class="bg-row"><span class="hint">오른쪽 배경 색</span>
+      <button class="swatch photo" data-bgc="" aria-pressed="${!c}" title="사진에서" aria-label="사진에서"></button>
+      ${state.settings.bgCustom.map((col) => sw(col, true)).join("")}
+      <label class="swatch custom" title="색 추가" aria-label="색 추가"><span>${PLUS_ICON}</span><input type="color" id="bgPick" value="${c || "#3b82f6"}"></label></div>
+    ${BG_PALETTE.map(([name, cols]) => `<div class="bg-row"><span class="hint">${name}</span>${cols.map((col) => sw(col, false)).join("")}</div>`).join("")}`;
 }
 function markSwatch() {
   const box = $("#bgColors");
