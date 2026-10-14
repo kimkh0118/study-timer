@@ -39,6 +39,8 @@
 
   /* ───────── 배경 ───────── */
   .app { position: relative; height: 100vh; display: grid; grid-template-columns: var(--art-w) 1fr; }
+  /* 흐린 배경은 창보다 크게 그리지만, 이 틀 밖으로는 절대 안 나가게(화면이 밀리는 원인이었어요) */
+  .bg-clip { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
   .bg-blur, .bg-full, .bg-solid, .dim { position: absolute; inset: 0; pointer-events: none; }
   /* 배경 투명도: 오른쪽 배경 층들을 함께 투명하게 → Mac 앱에선 뒤의 바탕화면이 흐리게 비쳐요 */
   .bg-full, .bg-solid { opacity: var(--bg-alpha, 1); }
@@ -151,13 +153,15 @@
   .chip { flex: none; max-width: 150px; }
   .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chip.more { padding: 0 11px; color: var(--text); background: rgba(255,255,255,.1); }
+  /* 과목 전체 목록: 맨 위 층(body 바로 아래)에 띄워서 다른 카드에 가려지지 않게 */
   .subj-menu {
-    position: absolute; right: 0; top: calc(100% + 8px); z-index: 6; width: min(360px, 100%);
+    position: fixed; z-index: 25; width: 360px;
     display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; border-radius: 20px; max-height: 220px; overflow-y: auto;
     background: rgba(24,24,28,.92); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
     box-shadow: 0 12px 40px rgba(0,0,0,.45), inset 0 0 0 .5px rgba(255,255,255,.2); animation: rise .18s ease;
   }
   .subj-menu[hidden] { display: none; }
+  .subj-menu .chip { max-width: 100%; }
   .chip {
     height: 30px; padding: 0 12px 0 10px; border-radius: 999px;
     display: inline-flex; align-items: center; gap: 7px;
@@ -338,7 +342,9 @@
   .switch[aria-checked="true"] { background: #34c27a; }
   .switch[aria-checked="true"]::after { transform: translateX(18px); }
   .subj-row { display: grid; grid-template-columns: 28px 1fr 28px; gap: 8px; align-items: center; margin-bottom: 6px; }
-  .swatch { width: 22px; height: 22px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 2px rgba(0,0,0,.25); }
+  .subj-color { position: relative; width: 22px; height: 22px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 2px rgba(0,0,0,.25), 0 0 0 1px rgba(255,255,255,.18); cursor: pointer; justify-self: center; transition: transform .12s; }
+  .subj-color:hover { transform: scale(1.12); }
+  .subj-color input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; border: 0; padding: 0; cursor: pointer; }
   .subj-add { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 4px; }
   .snd-pick { display: inline-flex; gap: 6px; align-items: center; }
   .snd-pick select.field { width: 190px; }
@@ -573,7 +579,7 @@
 </head>
 <body>
 <div class="app boot booting" id="app" data-layout="tall">
-  <div class="bg-blur" id="bgBlur"></div>
+  <div class="bg-clip"><div class="bg-blur" id="bgBlur"></div></div>
   <div class="bg-full" id="bgFull"></div>
   <div class="bg-solid" id="bgSolid"></div>
   <div class="dim" id="dim"></div>
@@ -621,7 +627,6 @@
           <button role="tab" data-mode="pomo">뽀모도로</button>
         </div>
         <div class="subjects" id="subjects" aria-label="과목"></div>
-        <div class="subj-menu" id="subjMenu" hidden></div>
       </div>
       <div class="timer-body">
         <div class="ring" id="ring">
@@ -679,6 +684,7 @@
     </div>
   </section>
 
+  <div class="subj-menu" id="subjMenu" hidden role="listbox" aria-label="과목 전체"></div>
   <div class="sheet-wrap" id="sheetWrap" hidden>
     <div class="sheet glass" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
       <div class="sheet-head">
@@ -713,6 +719,27 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const pad = (n) => String(n).padStart(2, "0");
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const COLORS = ["#e0262c", "#f1c232", "#4f8cff", "#34c27a", "#b18cff", "#ff8a3d", "#2fc6d6", "#c9c9cf"];
+/* 새 과목 색: 기본 8색 중 안 쓴 색 → 다 쓰면 기존 색들과 가장 덜 겹치는 색을 골라요 */
+function hslHex(h, s, l) {
+  s /= 100; l /= 100;
+  const f = (n) => { const k = (n + h / 30) % 12; const c = l - s * Math.min(l, 1 - l) * Math.max(-1, Math.min(k - 3, 9 - k, 1)); return Math.round(c * 255).toString(16).padStart(2, "0"); };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+function hexRgb(h) { const m = toHex(h).slice(1); return [0, 2, 4].map((i) => parseInt(m.slice(i, i + 2), 16)); }
+function toHex(c) { return /^#[0-9a-f]{6}$/i.test(c) ? c.toLowerCase() : /^#[0-9a-f]{3}$/i.test(c) ? "#" + [...c.slice(1)].map((x) => x + x).join("").toLowerCase() : "#888888"; }
+function nextSubjectColor() {
+  const used = state.subjects.map((x) => toHex(x.color));
+  const free = COLORS.find((c) => !used.includes(c));
+  if (free) return free;
+  let best = COLORS[0], bestD = -1;
+  for (let i = 0; i < 72; i++) {                       // 5°마다 후보를 보고 가장 먼 색
+    const cand = hslHex(i * 5, 70, i % 2 ? 62 : 52);
+    const [r, g, b] = hexRgb(cand);
+    const d = Math.min(...used.map((u) => { const [r2, g2, b2] = hexRgb(u); return (r - r2) ** 2 + (g - g2) ** 2 + (b - b2) ** 2; }));
+    if (d > bestD) { bestD = d; best = cand; }
+  }
+  return best;
+}
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const X_ICON = '<svg viewBox="0 0 14 14" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 2l10 10M12 2L2 12"/></svg>';
@@ -1115,8 +1142,8 @@ function renderControls() {
 
   const chipHTML = (s) => `<button class="chip" style="--c:${s.color}" data-id="${s.id}" aria-pressed="${s.id === (run ? run.subject : state.settings.subject)}" ${busy ? "disabled" : ""} title="${esc(s.name)}"><i></i><span>${esc(s.name)}</span></button>`;
   $("#subjects").innerHTML = state.subjects.map(chipHTML).join("") + `<button class="chip more" id="subjMore" hidden ${busy ? "disabled" : ""} aria-label="과목 더 보기"></button>`;
-  $("#subjMenu").innerHTML = state.subjects.map(chipHTML).join("");
-  if (busy) $("#subjMenu").hidden = true;
+  $("#subjMenu").innerHTML = state.subjects.map(chipHTML).join("").replace(/ title="[^"]*"/g, "");
+  if (busy) closeSubjMenu();
   fitSubjects();
 
   const go = $("#go");
@@ -1258,17 +1285,37 @@ function fitSubjects() {
   }
   more.textContent = `+${hidden}`;
 }
-window.addEventListener("resize", () => { if (!compact) fitSubjects(); });
+window.addEventListener("resize", () => { closeSubjMenu(); if (!compact) fitSubjects(); });
+function openSubjMenu() {
+  const m = $("#subjMenu"), r = $("#subjMore").getBoundingClientRect();
+  const W = innerWidth, H = innerHeight, gap = 8, pad = 12;
+  const width = Math.min(360, W - pad * 2);
+  m.style.width = width + "px";
+  m.style.left = Math.max(pad, Math.min(W - width - pad, r.right - width)) + "px";
+  m.hidden = false;
+  const below = H - r.bottom - gap - pad, above = r.top - gap - pad;
+  const want = m.scrollHeight;
+  if (want <= below || below >= above) {          // 아래에 펼치고, 모자라면 그 안에서 스크롤
+    m.style.top = r.bottom + gap + "px"; m.style.bottom = "";
+    m.style.maxHeight = Math.max(120, below) + "px";
+  } else {                                          // 위쪽이 더 넓으면 위로
+    m.style.top = ""; m.style.bottom = H - r.top + gap + "px";
+    m.style.maxHeight = Math.max(120, above) + "px";
+  }
+  const sel = m.querySelector('[aria-pressed="true"]');   // 고른 과목이 보이게 (목록 안에서만 스크롤)
+  if (sel && sel.offsetTop + sel.offsetHeight > m.clientHeight) m.scrollTop = sel.offsetTop - 10;
+}
+function closeSubjMenu() { $("#subjMenu").hidden = true; }
 function pickSubject(id) {
   if (run) return;
   state.settings.subject = id;
-  $("#subjMenu").hidden = true;
+  closeSubjMenu();
   save(); renderAll();
 }
 $("#subjects").onclick = (e) => {
   const b = e.target.closest(".chip");
   if (!b || run) return;
-  if (b.id === "subjMore") { $("#subjMenu").hidden = !$("#subjMenu").hidden; return; }
+  if (b.id === "subjMore") { $("#subjMenu").hidden ? openSubjMenu() : closeSubjMenu(); return; }
   pickSubject(b.dataset.id);
 };
 $("#subjMenu").onclick = (e) => { const b = e.target.closest(".chip"); if (b) pickSubject(b.dataset.id); };
@@ -1304,6 +1351,7 @@ document.addEventListener("mouseup", (e) => { const b = e.target.closest("button
 /* ════════════════ 시트 공통 ════════════════ */
 let sheetRender = null;
 function openSheet(title, render) {
+  closeSubjMenu();
   $("#sheetTitle").textContent = title;
   $("#sheetExtra").innerHTML = "";
   sheetRender = render;
@@ -1637,7 +1685,7 @@ function renderSettings() {
       <div class="group"><h3>과목</h3>
         ${state.subjects.map((s) => `
           <div class="subj-row">
-            <button class="swatch" style="--c:${s.color}" data-color="${s.id}" aria-label="${esc(s.name)} 색 바꾸기"></button>
+            <label class="subj-color" style="--c:${s.color}" title="눌러서 색 바꾸기"><input type="color" data-subjcolor="${s.id}" value="${toHex(s.color)}" aria-label="${esc(s.name)} 색 바꾸기"></label>
             <input class="field" value="${esc(s.name)}" data-rename="${s.id}" maxlength="12" aria-label="과목 이름">
             <button class="x close" data-drop="${s.id}" aria-label="${esc(s.name)} 지우기" ${state.subjects.length <= 1 ? "disabled" : ""} style="width:28px;height:28px">${X_ICON}</button>
           </div>`).join("")}
@@ -1871,9 +1919,6 @@ $("#sheetBody").addEventListener("click", (e) => {
     state.settings[t.dataset.k] = Math.min(c.max, Math.max(c.min, state.settings[t.dataset.k] + c.step * Number(t.dataset.d)));
   } else if (t.dataset.toggle) {
     state.settings[t.dataset.toggle] = !state.settings[t.dataset.toggle];
-  } else if (t.dataset.color) {
-    const s = state.subjects.find((x) => x.id === t.dataset.color);
-    s.color = COLORS[(COLORS.indexOf(s.color) + 1) % COLORS.length];
   } else if (t.dataset.drop) {
     state.subjects = state.subjects.filter((x) => x.id !== t.dataset.drop);
     if (state.settings.subject === t.dataset.drop) state.settings.subject = state.subjects[0].id;
@@ -1884,8 +1929,18 @@ $("#sheetBody").addEventListener("click", (e) => {
   } else return;
   save(); renderSettings(); renderAll();
 });
+$("#sheetBody").addEventListener("input", (e) => {
+  const id = e.target.dataset.subjcolor;
+  if (!id) return;
+  const sub = state.subjects.find((x) => x.id === id);
+  if (!sub) return;
+  sub.color = e.target.value;
+  e.target.parentElement.style.setProperty("--c", sub.color);
+  renderAll();
+});
 $("#sheetBody").addEventListener("change", (e) => {
   const d = e.target.dataset;
+  if (d.subjcolor) { save(); return; }
   if (d.maxsec !== undefined) { state.settings.maxSec = Number(e.target.value); save(); return; }
   if (d.volume !== undefined) { state.settings.volume = Number(e.target.value); save(); return; }
   const id = e.target.dataset.rename;
@@ -1900,7 +1955,7 @@ $("#sheetBody").addEventListener("submit", (e) => {
   const name = new FormData(e.target).get("name").trim();
   if (!name) return;
   const used = new Set(state.subjects.map((s) => s.color));
-  state.subjects.push({ id: uid(), name, color: COLORS.find((c) => !used.has(c)) || COLORS[state.subjects.length % COLORS.length] });
+  state.subjects.push({ id: uid(), name, color: nextSubjectColor() });
   save(); renderSettings(); renderAll();
   $("#subjAdd input").focus();
 });
@@ -1977,6 +2032,8 @@ document.addEventListener("change", (e) => {
   if (e.target.matches("[data-volume], #alarmVol")) onVolumeInput(Number(e.target.value), true);
 });
 
+/* 화면 전체가 옆/아래로 밀리는 일 막기 (어떤 이유로든 창 자체가 스크롤되면 바로 제자리로) */
+window.addEventListener("scroll", () => { if (scrollX || scrollY) scrollTo(0, 0); });
 /* ════════════════ 간소화 ════════════════ */
 // 사진·글자를 끌어서 옮기는 동작은 쓰지 않아요(간소화 창이 검게 변하던 원인)
 document.addEventListener("dragstart", (e) => e.preventDefault());
@@ -1985,6 +2042,7 @@ function setCompact(on) {
   if (on === compact) return;
   compact = on;
   if (on) {
+    closeSubjMenu();
     endAdjust();
     closeSheet();
     $("#miniImg").src = currentWall().src;
