@@ -59,7 +59,24 @@
   }
   .dim { background: #000; opacity: calc(var(--dim-amount, .15) * var(--bg-alpha, 1)); }
   .app.solid-bg .bg-blur { display: none; }
-  .bg-colors { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .bg-colors { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+  .theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 10px 8px; }
+  .theme-wrap { position: relative; display: flex; }
+  .theme { position: relative; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer; border-radius: 12px; padding: 0; }
+  .theme-prev { width: 100%; height: 44px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; font-size: 13px; line-height: 1; font-variant-numeric: tabular-nums;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); transition: transform .12s, box-shadow .12s; }
+  .theme-prev.photo { background: linear-gradient(135deg, #8a6a5a, #3a3a52); color: #fff; }
+  .theme-prev.more { background: rgba(255,255,255,.1); color: var(--text); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.3); }
+  .theme-prev.more svg { width: 16px; height: 16px; }
+  .theme:hover .theme-prev { transform: translateY(-2px); }
+  .theme[aria-pressed="true"] .theme-prev { box-shadow: 0 0 0 2.5px #fff, 0 0 0 4px rgba(0,0,0,.35); }
+  .theme[aria-pressed="true"]::after { content: ""; position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23111' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/12px no-repeat; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+  .theme-name { font-size: 11.5px; color: var(--dim); white-space: nowrap; }
+  .theme[aria-pressed="true"] .theme-name { color: var(--text); font-weight: 700; }
+  .theme input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; border: 0; padding: 0; cursor: pointer; }
+  .theme-wrap .swatch-del { right: -6px; top: -6px; z-index: 1; }
+  .theme-wrap:hover .swatch-del { opacity: 1; }
   .bg-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
   .bg-row > .hint { width: 92px; flex: none; }
   .bg-row .seg button { height: 28px; padding: 0 12px; }
@@ -163,14 +180,22 @@
     box-shadow: 0 12px 40px rgba(0,0,0,.45), inset 0 0 0 .5px rgba(255,255,255,.2); animation: rise .18s ease;
   }
   .subj-menu[hidden] { display: none; }
-  /* 과목 색 고르기: 색 12개 + (+) 한 줄 */
+  /* 과목 색 고르기: 큰 색 칩(고른 색에 체크) + 직접 고르기 */
   .color-pop {
-    position: fixed; z-index: 40; display: flex; gap: 7px; padding: 10px 12px; border-radius: 999px;
-    background: rgba(28,28,32,.94); -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px);
+    position: fixed; z-index: 40; padding: 12px 14px 14px; border-radius: 18px; width: 298px;
+    background: rgba(28,28,32,.95); -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px); color: #f5f5f7;
     box-shadow: 0 12px 36px rgba(0,0,0,.45), inset 0 0 0 .5px rgba(255,255,255,.22); animation: rise .16s ease;
   }
   .color-pop[hidden] { display: none; }
-  .color-pop .swatch { width: 24px; height: 24px; }
+  .cp-head { font-size: 12px; font-weight: 700; color: rgba(255,255,255,.7); margin-bottom: 10px; }
+  .cp-chips { display: grid; grid-template-columns: repeat(7, 30px); gap: 10px; justify-content: space-between; }
+  .chipc { position: relative; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: transparent; cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); transition: transform .1s; padding: 0; }
+  .chipc:hover { transform: scale(1.1); }
+  .chipc svg { width: 15px; height: 15px; }
+  .chipc[aria-pressed="true"] { color: var(--ck, #fff); box-shadow: 0 0 0 2px rgba(28,28,32,1), 0 0 0 4px #fff; }
+  .chipc.more { background: rgba(255,255,255,.12); color: #fff; }
+  .chipc.more input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; border: 0; padding: 0; cursor: pointer; }
   .swatch:not(.custom):hover { transform: scale(1.12); }
   .swatch { transition: transform .1s; }
   .swatch.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: 0; padding: 0; }
@@ -245,9 +270,12 @@
   .streak { font-size: 12px; color: var(--dim); }
   .bars { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; align-items: end; margin-top: 10px; min-height: 60px; }
   .bar-col { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
-  .bar-col .b { width: 100%; max-width: 26px; border-radius: 6px; background: rgba(255,255,255,.22); min-height: 3px; transition: height .4s; }
-  .bar-col.today .b { background: var(--pin); }
-  .bar-col.met .b { background: var(--tag); }
+  .bar-col .b { width: 100%; max-width: 26px; border-radius: 6px; background: rgba(255,255,255,.14); min-height: 3px; transition: height .4s;
+    display: flex; flex-direction: column-reverse; overflow: hidden; }
+  .bar-col .b i { display: block; width: 100%; flex: none; }
+  .bar-col .b i + i { box-shadow: 0 1px 0 rgba(0,0,0,.18); }
+  .bar-col:not(.today) .b { opacity: .82; }
+  .bar-col.met span::after { content: "★"; margin-left: 1px; color: var(--tag); font-size: 9px; vertical-align: 1px; }
   .bar-col span { font-size: 11px; color: var(--faint); }
   .bar-col.today span { color: var(--text); font-weight: 700; }
 
@@ -506,7 +534,7 @@
   .app.ink-dark .ring[data-phase="break"] .bar { stroke: rgba(0,0,0,.72); }
   .app.ink-dark .dots i, .app.ink-dark .meter, .app.ink-dark .mini-bar { background: rgba(0,0,0,.12); }
   .app.ink-dark .stack { background: rgba(0,0,0,.08); }
-  .app.ink-dark .bar-col .b { background: rgba(0,0,0,.2); }
+  .app.ink-dark .bar-col .b { background: rgba(0,0,0,.1); }
   .app.ink-dark .mini-bar.break i { background: rgba(0,0,0,.7); }
 
   /* ───────── 간소화 ───────── */
@@ -754,7 +782,10 @@ const pad = (n) => String(n).padStart(2, "0");
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const COLORS = ["#e0262c", "#f1c232", "#4f8cff", "#34c27a", "#b18cff", "#ff8a3d", "#2fc6d6", "#c9c9cf"];
 // 오른쪽 배경 기본 색 12개 (저장 데이터 정리(migrate)에서도 쓰니까 맨 위에)
-const BG_COLORS = ["#1c1c1e", "#3a3a3c", "#1e3a8a", "#2563eb", "#059669", "#ea580c", "#dc2626", "#9333ea", "#dbeafe", "#fce7f3", "#fef9c3", "#f2f2f7"];
+// 오른쪽 배경 테마(카톡 테마처럼 미리 보기 카드로 골라요). 밝은 테마는 글씨가 자동으로 검게
+const BG_THEMES = [["#1c1c1e", "블랙"], ["#3a3a3c", "차콜"], ["#1e3a8a", "네이비"], ["#2563eb", "블루"], ["#059669", "그린"], ["#9333ea", "퍼플"],
+  ["#dc2626", "레드"], ["#ea580c", "오렌지"], ["#fce7f3", "핑크"], ["#dbeafe", "하늘"], ["#d1fae5", "민트"], ["#fef9c3", "레몬"], ["#f2f2f7", "화이트"]];
+const BG_COLORS = BG_THEMES.map(([c]) => c);
 /* 새 과목 색: 기본 8색 중 안 쓴 색 → 다 쓰면 기존 색들과 가장 덜 겹치는 색을 골라요 */
 function hslHex(h, s, l) {
   s /= 100; l /= 100;
@@ -1297,7 +1328,9 @@ function renderStats() {
   $("#bars").innerHTML = days.map((d, i) => {
     const k = dayKey(d);
     const cls = [k === todayK ? "today" : "", vals[i] >= goal ? "met" : ""].join(" ");
-    return `<div class="bar-col ${cls}" title="${d.getMonth() + 1}월 ${d.getDate()}일 ${fmtDur(vals[i])}"><div class="b" style="height:${Math.max(3, (vals[i] / max) * 100)}%"></div><span>${DAYS[i]}</span></div>`;
+    // 과목 색으로 쌓아서 보여 줘요(아래부터 많이 한 과목)
+    const segs = vals[i] ? subjectTotals(k).map(([id, sec]) => `<i style="height:${(sec / vals[i]) * 100}%;background:${subjectOf(id).color}"></i>`).join("") : "";
+    return `<div class="bar-col ${cls}" title="${d.getMonth() + 1}월 ${d.getDate()}일 ${fmtDur(vals[i])}"><div class="b" style="height:${Math.max(3, (vals[i] / max) * 100)}%">${segs}</div><span>${DAYS[i]}</span></div>`;
   }).join("");
   const st = streakDays(totals);
   $("#streak").textContent = st ? `${st}일 연속` : "";
@@ -1620,19 +1653,25 @@ $("#sheetBody").addEventListener("click", (e) => {
   }
 });
 
-/* 오른쪽 배경 색 줄: 사진에서 · 기본 색 · 내가 추가한 색 · + (색 추가) */
+/* 오른쪽 배경: 테마 카드(사진 · 기본 테마 · 내 색 · 직접 고르기) + 글씨 색 */
 function bgColorsHTML() {
   const c = state.settings.bgColor, ink = state.settings.ink || "auto";
-  const sw = (col, mine) => `<span class="swatch-wrap"><button class="swatch" data-bgc="${col}" style="background:${col}" aria-pressed="${c === col}" aria-label="${col}"></button>${mine ? `<button class="swatch-del" data-bgdel="${col}" aria-label="${col} 지우기">${X_ICON}</button>` : ""}</span>`;
-  return `<div class="bg-row"><span class="hint">글씨 색</span>
+  const card = (col, name, mine) => {
+    const dark = lumOf(col) > 0.36;
+    return `<span class="theme-wrap"><button class="theme" data-bgc="${col}" aria-pressed="${c === col}" aria-label="${name}">
+        <span class="theme-prev" style="background:${col};color:${dark ? "#111" : "#fff"}">25:00</span><span class="theme-name">${name}</span></button>
+      ${mine ? `<button class="swatch-del" data-bgdel="${col}" aria-label="${name} 지우기">${X_ICON}</button>` : ""}</span>`;
+  };
+  return `<div class="theme-grid">
+      <span class="theme-wrap"><button class="theme" data-bgc="" aria-pressed="${!c}" aria-label="사진"><span class="theme-prev photo">25:00</span><span class="theme-name">사진</span></button></span>
+      ${BG_THEMES.map(([col, name]) => card(col, name, false)).join("")}
+      ${state.settings.bgCustom.map((col) => card(col, "내 색", true)).join("")}
+      <span class="theme-wrap"><label class="theme" title="다른 색 고르기"><span class="theme-prev more">${PLUS_ICON}</span><span class="theme-name">직접 고르기</span><input type="color" id="bgPick" value="${c || "#3b82f6"}"></label></span>
+    </div>
+    <div class="bg-row"><span class="hint">글씨 색</span>
       <div class="seg" role="tablist" aria-label="글씨 색">
         ${[["auto", "자동"], ["light", "흰 글씨"], ["dark", "검정 글씨"]].map(([v, l]) => `<button role="tab" data-ink="${v}" aria-selected="${ink === v}">${l}</button>`).join("")}
-      </div></div>
-    <div class="bg-row"><span class="hint">오른쪽 배경 색</span>
-      <button class="swatch photo" data-bgc="" aria-pressed="${!c}" title="사진에서" aria-label="사진에서"></button>
-      ${BG_COLORS.map((col) => sw(col, false)).join("")}
-      ${state.settings.bgCustom.map((col) => sw(col, true)).join("")}
-      <label class="swatch custom" title="다른 색 고르기" aria-label="다른 색 고르기"><span>${PLUS_ICON}</span><input type="color" id="bgPick" value="${c || "#3b82f6"}"></label></div>`;
+      </div></div>`;
 }
 function markSwatch() {
   const box = $("#bgColors");
@@ -1660,8 +1699,9 @@ function openColorPop(anchor, cur, pick) {
   cur = toHex(cur);
   const m = $("#colorPop");
   colorPop = { anchor, pick };
-  m.innerHTML = SUBJ_COLORS.map((col) => `<button class="swatch" data-cp="${col}" style="background:${col}" aria-pressed="${col === cur}" aria-label="${col}"></button>`).join("")
-    + `<label class="swatch custom" title="다른 색 고르기" aria-label="다른 색 고르기"><span>${PLUS_ICON}</span><input type="color" id="cpNative" value="${cur}"></label>`;
+  m.innerHTML = `<div class="cp-head">과목 색</div><div class="cp-chips">`
+    + SUBJ_COLORS.map((col) => `<button class="chipc" data-cp="${col}" style="background:${col};--ck:${lumOf(col) > 0.45 ? "#111" : "#fff"}" aria-pressed="${col === cur}" aria-label="${col}">${CHECK_ICON}</button>`).join("")
+    + `<label class="chipc more" title="다른 색 고르기" aria-label="다른 색 고르기">${PLUS_ICON}<input type="color" id="cpNative" value="${cur}"></label></div>`;
   m.hidden = false;
   const r = anchor.getBoundingClientRect(), W = innerWidth, H = innerHeight, pad = 10, w = m.offsetWidth, h = m.offsetHeight;
   m.style.left = Math.max(pad, Math.min(W - w - pad, r.left - 8)) + "px";
