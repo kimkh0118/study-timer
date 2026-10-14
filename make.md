@@ -1,4 +1,4 @@
-# 타이머 앱 v2 개발 가이드
+# 타이머 앱 v3 개발 가이드
 
 이 문서는 앱을 직접 고치고 다시 빌드하려는 사람을 위한 설명이에요.
 앱 사용법은 [README.md](README.md), v1에서 바뀐 점과 이유는 [CHANGELOG.md](CHANGELOG.md)를 보세요.
@@ -66,7 +66,7 @@ study-timer/
 ├── make.md                 이 문서
 ├── build.sh                빌드 스크립트
 ├── build.command           Finder에서 더블클릭용 (build.sh --install 실행)
-├── CHANGELOG.md            v1 → v2.0 바뀐 점과 이유
+├── CHANGELOG.md            버전별 바뀐 점과 이유
 ├── src/
 │   └── main.swift          Swift 껍데기 전부 (약 840줄)
 ├── app/
@@ -554,6 +554,8 @@ touch ~/Desktop/캐릭터\ 타이머.app && killall Dock
 6. v1.1~v1.7: 맨 위 알림 창, 유튜브·노래 파일 알람, 간소화 모드, 소리 크기 미리 듣기 → 유튜브 자동 재생이 끝까지 불안정
 7. v1.8~v1.9: 알람을 앱에 든 소리 + Apple Music 30초 미리 듣기로 정리, 간소화 창 고정
 8. **v2.0**: 알림 문구 다듬기, 안 쓰는 코드 정리, 문서 정리 (자세한 이유는 [CHANGELOG.md](CHANGELOG.md))
+9. **v2.01**: 배경 위치·색·밝기·투명도, 달력 크기 고정, 과목 +N, 간소화 창 끌어서 옮기기
+10. **v3.01**: 글씨 색, 피그마식 색 고르기 + 저장한 색, 이번 주 그래프 색(자동/기본 색)과 미리 보기
 
 ### 다음에 해 볼 만한 것
 
