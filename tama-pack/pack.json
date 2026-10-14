@@ -1,0 +1,684 @@
+{
+ "version": 1,
+ "name": "다마고치+ 공룡 팩",
+ "config": {
+  "minGoalMin": 240,
+  "hatchDays": 5,
+  "coinStudySec": 600,
+  "goalBonusCoins": 20,
+  "xpStudySec": 60,
+  "stageXp": {
+   "teen": 600,
+   "adult": 1800
+  },
+  "hungryHours": 24,
+  "veryHungryHours": 48,
+  "deathHours": 72,
+  "eggCount": [
+   3,
+   5
+  ],
+  "starter": {
+   "snack": 2
+  },
+  "nameMax": 10,
+  "eggArts": 12
+ },
+ "rarity": {
+  "common": {
+   "label": "일반",
+   "weight": 62
+  },
+  "rare": {
+   "label": "희귀",
+   "weight": 28
+  },
+  "special": {
+   "label": "특별",
+   "weight": 10
+  }
+ },
+ "foods": [
+  {
+   "id": "snack",
+   "name": "별사탕 간식",
+   "price": 5,
+   "love": 1,
+   "desc": "가볍게 배를 채우는 달콤한 별사탕."
+  },
+  {
+   "id": "meal",
+   "name": "따끈한 밥",
+   "price": 12,
+   "love": 3,
+   "desc": "든든한 한 끼. 먹이면 애정이 조금 더 올라요."
+  },
+  {
+   "id": "feast",
+   "name": "무지개 케이크",
+   "price": 30,
+   "love": 8,
+   "desc": "특별한 날의 무지개 케이크. 애정이 크게 올라요."
+  }
+ ],
+ "species": [
+  {
+   "id": "rex",
+   "name": "티노",
+   "desc": "작은 팔로 연필을 꼭 쥐는 티라노사우루스. 다 자라면 잎사귀 왕관을 써요.",
+   "rarity": "rare",
+   "prompt": "orange-red Tyrannosaurus",
+   "art": {
+    "c": "#f2795a",
+    "b": "#ffe1c9",
+    "a": "#c9473a",
+    "pose": "biped",
+    "head": "big",
+    "feat": [
+     "arms"
+    ]
+   },
+   "img": {
+    "baby": "art/rex_baby.png",
+    "teen": "art/rex_teen.png",
+    "adult": "art/rex_adult.png"
+   }
+  },
+  {
+   "id": "trike",
+   "name": "트리케",
+   "desc": "세 개의 뿔과 넓은 프릴을 가진 트리케라톱스. 고집 있게 끝까지 공부해요.",
+   "rarity": "common",
+   "prompt": "sky-blue Triceratops with three horns and a frill",
+   "art": {
+    "c": "#7ab8e8",
+    "b": "#e3f2ff",
+    "a": "#3f7fbf",
+    "pose": "quad",
+    "feat": [
+     "frill",
+     "horns3"
+    ]
+   },
+   "img": {
+    "baby": "art/trike_baby.png",
+    "teen": "art/trike_teen.png",
+    "adult": "art/trike_adult.png"
+   }
+  },
+  {
+   "id": "stego",
+   "name": "스테고",
+   "desc": "등에 주황 골판이 줄지어 난 스테고사우루스. 집중하면 골판이 반짝여요.",
+   "rarity": "common",
+   "prompt": "green Stegosaurus with orange back plates",
+   "art": {
+    "c": "#8ccf72",
+    "b": "#eaf7d9",
+    "a": "#f39a3c",
+    "pose": "quad",
+    "feat": [
+     "plates",
+     "tailspikes"
+    ]
+   },
+   "img": {
+    "baby": "art/stego_baby.png",
+    "teen": "art/stego_teen.png",
+    "adult": "art/stego_adult.png"
+   }
+  },
+  {
+   "id": "bronto",
+   "name": "브라키",
+   "desc": "긴 목으로 높은 책장도 닿는 브라키오사우루스. 나뭇잎 간식을 제일 좋아해요.",
+   "rarity": "common",
+   "prompt": "lavender Brachiosaurus with a long neck",
+   "art": {
+    "c": "#b7a4e6",
+    "b": "#efe9ff",
+    "a": "#7d68c2",
+    "pose": "quad",
+    "feat": [
+     "longneck"
+    ]
+   },
+   "img": {
+    "baby": "art/bronto_baby.png",
+    "teen": "art/bronto_teen.png",
+    "adult": "art/bronto_adult.png"
+   }
+  },
+  {
+   "id": "anky",
+   "name": "안키",
+   "desc": "단단한 갑옷과 곤봉 꼬리를 가진 안킬로사우루스. 수비력 최고예요.",
+   "rarity": "common",
+   "prompt": "sand-colored Ankylosaurus with armor and a club tail",
+   "art": {
+    "c": "#d9b47c",
+    "b": "#fbefd9",
+    "a": "#9c7442",
+    "pose": "quad",
+    "feat": [
+     "armor",
+     "club"
+    ]
+   },
+   "img": {
+    "baby": "art/anky_baby.png",
+    "teen": "art/anky_teen.png",
+    "adult": "art/anky_adult.png"
+   }
+  },
+  {
+   "id": "para",
+   "name": "파라",
+   "desc": "관 모양 볏으로 노래하는 파라사우롤로푸스. 알람 소리를 좋아해요.",
+   "rarity": "common",
+   "prompt": "pink Parasaurolophus with a tube crest",
+   "art": {
+    "c": "#f7a9c4",
+    "b": "#fff0f5",
+    "a": "#d0678f",
+    "pose": "biped",
+    "feat": [
+     "tubecrest"
+    ]
+   },
+   "img": {
+    "baby": "art/para_baby.png",
+    "teen": "art/para_teen.png",
+    "adult": "art/para_adult.png"
+   }
+  },
+  {
+   "id": "raptor",
+   "name": "랩토",
+   "desc": "깃털이 보송한 벨로키랍토르. 빠르게 문제를 풀어요.",
+   "rarity": "rare",
+   "prompt": "purple feathered Velociraptor",
+   "art": {
+    "c": "#a98be0",
+    "b": "#f0e8ff",
+    "a": "#6f52b0",
+    "pose": "biped",
+    "feat": [
+     "feathers",
+     "claw"
+    ]
+   },
+   "img": {
+    "baby": "art/raptor_baby.png",
+    "teen": "art/raptor_teen.png",
+    "adult": "art/raptor_adult.png"
+   }
+  },
+  {
+   "id": "ptera",
+   "name": "프테라",
+   "desc": "하늘을 나는 프테라노돈. 높은 곳에서 계획을 세워요.",
+   "rarity": "rare",
+   "prompt": "sky-blue Pteranodon with a head crest and wings",
+   "art": {
+    "c": "#8fd0f0",
+    "b": "#e8f7ff",
+    "a": "#4a9cc9",
+    "pose": "fly",
+    "feat": [
+     "wings",
+     "backcrest"
+    ]
+   },
+   "img": {
+    "baby": "art/ptera_baby.png",
+    "teen": "art/ptera_teen.png",
+    "adult": "art/ptera_adult.png"
+   }
+  },
+  {
+   "id": "spino",
+   "name": "스피노",
+   "desc": "등에 커다란 돛을 단 스피노사우루스. 물가에서 공부해요.",
+   "rarity": "special",
+   "prompt": "teal Spinosaurus with a big coral sail",
+   "art": {
+    "c": "#5fc4b8",
+    "b": "#e2f8f4",
+    "a": "#ff8a6b",
+    "pose": "biped",
+    "feat": [
+     "sail"
+    ]
+   },
+   "img": {
+    "baby": "art/spino_baby.png",
+    "teen": "art/spino_teen.png",
+    "adult": "art/spino_adult.png"
+   }
+  },
+  {
+   "id": "pachy",
+   "name": "파키",
+   "desc": "단단한 박치기 머리의 파키케팔로사우루스. 포기를 몰라요.",
+   "rarity": "common",
+   "prompt": "peach Pachycephalosaurus with a dome head",
+   "art": {
+    "c": "#f6b98e",
+    "b": "#fff0e2",
+    "a": "#c97c4c",
+    "pose": "biped",
+    "feat": [
+     "dome"
+    ]
+   },
+   "img": {
+    "baby": "art/pachy_baby.png",
+    "teen": "art/pachy_teen.png",
+    "adult": "art/pachy_adult.png"
+   }
+  },
+  {
+   "id": "iguano",
+   "name": "이구아",
+   "desc": "엄지 가시가 멋진 이구아노돈. 꼼꼼하게 필기해요.",
+   "rarity": "common",
+   "prompt": "green Iguanodon with thumb spikes",
+   "art": {
+    "c": "#9bd37f",
+    "b": "#eef8e3",
+    "a": "#5c9a46",
+    "pose": "biped",
+    "feat": [
+     "thumb"
+    ]
+   },
+   "img": {
+    "baby": "art/iguano_baby.png",
+    "teen": "art/iguano_teen.png",
+    "adult": "art/iguano_adult.png"
+   }
+  },
+  {
+   "id": "diplo",
+   "name": "디플로",
+   "desc": "꼬리가 아주 긴 디플로도쿠스. 긴 공부도 거뜬해요.",
+   "rarity": "common",
+   "prompt": "mint Diplodocus with a very long tail",
+   "art": {
+    "c": "#8fe0c4",
+    "b": "#e8fbf3",
+    "a": "#4fb08e",
+    "pose": "quad",
+    "feat": [
+     "longneck",
+     "longtail"
+    ]
+   },
+   "img": {
+    "baby": "art/diplo_baby.png",
+    "teen": "art/diplo_teen.png",
+    "adult": "art/diplo_adult.png"
+   }
+  },
+  {
+   "id": "carno",
+   "name": "카르노",
+   "desc": "눈 위에 작은 뿔이 난 카르노타우루스. 달리기가 빨라요.",
+   "rarity": "rare",
+   "prompt": "red Carnotaurus with small horns above the eyes",
+   "art": {
+    "c": "#ef6f6f",
+    "b": "#ffe3e0",
+    "a": "#b43d3d",
+    "pose": "biped",
+    "feat": [
+     "horns2",
+     "arms"
+    ]
+   },
+   "img": {
+    "baby": "art/carno_baby.png",
+    "teen": "art/carno_teen.png",
+    "adult": "art/carno_adult.png"
+   }
+  },
+  {
+   "id": "dilo",
+   "name": "딜로",
+   "desc": "두 개의 볏과 접이식 목깃을 가진 딜로포사우루스.",
+   "rarity": "rare",
+   "prompt": "yellow-green Dilophosaurus with double crest and neck frill",
+   "art": {
+    "c": "#c6dd6a",
+    "b": "#f6fbdc",
+    "a": "#ff9f43",
+    "pose": "biped",
+    "feat": [
+     "doublecrest",
+     "neckfrill"
+    ]
+   },
+   "img": {
+    "baby": "art/dilo_baby.png",
+    "teen": "art/dilo_teen.png",
+    "adult": "art/dilo_adult.png"
+   }
+  },
+  {
+   "id": "ovi",
+   "name": "오비",
+   "desc": "알을 소중히 지키는 오비랍토르. 둥지 지킴이예요.",
+   "rarity": "common",
+   "prompt": "orange feathered Oviraptor with a beak and crest",
+   "art": {
+    "c": "#ffb15e",
+    "b": "#fff2df",
+    "a": "#d9772a",
+    "pose": "biped",
+    "feat": [
+     "beak",
+     "crest",
+     "feathers"
+    ]
+   },
+   "img": {
+    "baby": "art/ovi_baby.png",
+    "teen": "art/ovi_teen.png",
+    "adult": "art/ovi_adult.png"
+   }
+  },
+  {
+   "id": "therizino",
+   "name": "테리지",
+   "desc": "긴 발톱과 복슬한 깃털의 테리지노사우루스. 사실 채식주의자예요.",
+   "rarity": "rare",
+   "prompt": "cream fluffy Therizinosaurus with long claws",
+   "art": {
+    "c": "#f3e2bf",
+    "b": "#fffaf0",
+    "a": "#b99a63",
+    "pose": "biped",
+    "feat": [
+     "feathers",
+     "bigclaws"
+    ]
+   },
+   "img": {
+    "baby": "art/therizino_baby.png",
+    "teen": "art/therizino_teen.png",
+    "adult": "art/therizino_adult.png"
+   }
+  },
+  {
+   "id": "galli",
+   "name": "갈리",
+   "desc": "타조처럼 날쌘 갈리미무스. 쉬는 시간 달리기 1등.",
+   "rarity": "common",
+   "prompt": "beige Gallimimus, ostrich-like and slim",
+   "art": {
+    "c": "#e9cfa3",
+    "b": "#fbf3e4",
+    "a": "#b08a55",
+    "pose": "biped",
+    "feat": [
+     "beak",
+     "slim"
+    ]
+   },
+   "img": {
+    "baby": "art/galli_baby.png",
+    "teen": "art/galli_teen.png",
+    "adult": "art/galli_adult.png"
+   }
+  },
+  {
+   "id": "maia",
+   "name": "마이아",
+   "desc": "다정한 엄마 공룡 마이아사우라. 모두를 챙겨요.",
+   "rarity": "common",
+   "prompt": "rose-brown Maiasaura, gentle duck-billed dinosaur",
+   "art": {
+    "c": "#d99a8a",
+    "b": "#fbe8e2",
+    "a": "#a8655a",
+    "pose": "quad",
+    "feat": [
+     "duckbill"
+    ]
+   },
+   "img": {
+    "baby": "art/maia_baby.png",
+    "teen": "art/maia_teen.png",
+    "adult": "art/maia_adult.png"
+   }
+  },
+  {
+   "id": "proto",
+   "name": "프로토",
+   "desc": "작은 프릴의 프로토케라톱스. 호기심이 많아요.",
+   "rarity": "common",
+   "prompt": "yellow Protoceratops with a small frill and beak",
+   "art": {
+    "c": "#ffd66b",
+    "b": "#fff6d6",
+    "a": "#d9a52e",
+    "pose": "quad",
+    "feat": [
+     "frill",
+     "beak"
+    ]
+   },
+   "img": {
+    "baby": "art/proto_baby.png",
+    "teen": "art/proto_teen.png",
+    "adult": "art/proto_adult.png"
+   }
+  },
+  {
+   "id": "kentro",
+   "name": "켄트로",
+   "desc": "꼬리와 등에 가시가 난 켄트로사우루스. 든든한 친구예요.",
+   "rarity": "common",
+   "prompt": "olive Kentrosaurus with back spikes",
+   "art": {
+    "c": "#b5c77a",
+    "b": "#f2f6df",
+    "a": "#7c8d43",
+    "pose": "quad",
+    "feat": [
+     "spikes",
+     "tailspikes"
+    ]
+   },
+   "img": {
+    "baby": "art/kentro_baby.png",
+    "teen": "art/kentro_teen.png",
+    "adult": "art/kentro_adult.png"
+   }
+  },
+  {
+   "id": "archae",
+   "name": "아키",
+   "desc": "무지갯빛 깃털 날개의 아르카이오프테릭스. 공룡과 새의 중간이에요.",
+   "rarity": "special",
+   "prompt": "rainbow-feathered Archaeopteryx",
+   "art": {
+    "c": "#7fb7ff",
+    "b": "#f2f7ff",
+    "a": "#ff7eb3",
+    "pose": "fly",
+    "feat": [
+     "wings",
+     "feathers",
+     "rainbow"
+    ]
+   },
+   "img": {
+    "baby": "art/archae_baby.png",
+    "teen": "art/archae_teen.png",
+    "adult": "art/archae_adult.png"
+   }
+  },
+  {
+   "id": "mosa",
+   "name": "모사",
+   "desc": "바다의 왕 모사사우루스. 물속에서 노래해요.",
+   "rarity": "special",
+   "prompt": "deep blue Mosasaurus with flippers",
+   "art": {
+    "c": "#4f8fd9",
+    "b": "#dff0ff",
+    "a": "#2b5fa3",
+    "pose": "swim",
+    "feat": [
+     "flippers",
+     "fintail"
+    ]
+   },
+   "img": {
+    "baby": "art/mosa_baby.png",
+    "teen": "art/mosa_teen.png",
+    "adult": "art/mosa_adult.png"
+   }
+  },
+  {
+   "id": "plesio",
+   "name": "플레시",
+   "desc": "긴 목으로 물결을 타는 플레시오사우루스.",
+   "rarity": "rare",
+   "prompt": "aqua Plesiosaurus with long neck and flippers",
+   "art": {
+    "c": "#6fd3d3",
+    "b": "#e3fbfb",
+    "a": "#3a9f9f",
+    "pose": "swim",
+    "feat": [
+     "longneck",
+     "flippers"
+    ]
+   },
+   "img": {
+    "baby": "art/plesio_baby.png",
+    "teen": "art/plesio_teen.png",
+    "adult": "art/plesio_adult.png"
+   }
+  },
+  {
+   "id": "micro",
+   "name": "마이크로",
+   "desc": "네 날개로 나는 작은 마이크로랍토르. 밤하늘 깃털이 반짝여요.",
+   "rarity": "special",
+   "prompt": "black-blue iridescent four-winged Microraptor",
+   "art": {
+    "c": "#4b5a8c",
+    "b": "#dfe5ff",
+    "a": "#7ee0ff",
+    "pose": "fly",
+    "feat": [
+     "wings",
+     "feathers",
+     "iridescent"
+    ]
+   },
+   "img": {
+    "baby": "art/micro_baby.png",
+    "teen": "art/micro_teen.png",
+    "adult": "art/micro_adult.png"
+   }
+  }
+ ],
+ "assets": [
+  "art/anky_adult.png",
+  "art/anky_baby.png",
+  "art/anky_teen.png",
+  "art/archae_adult.png",
+  "art/archae_baby.png",
+  "art/archae_teen.png",
+  "art/bronto_adult.png",
+  "art/bronto_baby.png",
+  "art/bronto_teen.png",
+  "art/carno_adult.png",
+  "art/carno_baby.png",
+  "art/carno_teen.png",
+  "art/dilo_adult.png",
+  "art/dilo_baby.png",
+  "art/dilo_teen.png",
+  "art/diplo_adult.png",
+  "art/diplo_baby.png",
+  "art/diplo_teen.png",
+  "art/galli_adult.png",
+  "art/galli_baby.png",
+  "art/galli_teen.png",
+  "art/iguano_adult.png",
+  "art/iguano_baby.png",
+  "art/iguano_teen.png",
+  "art/kentro_adult.png",
+  "art/kentro_baby.png",
+  "art/kentro_teen.png",
+  "art/maia_adult.png",
+  "art/maia_baby.png",
+  "art/maia_teen.png",
+  "art/micro_adult.png",
+  "art/micro_baby.png",
+  "art/micro_teen.png",
+  "art/mosa_adult.png",
+  "art/mosa_baby.png",
+  "art/mosa_teen.png",
+  "art/ovi_adult.png",
+  "art/ovi_baby.png",
+  "art/ovi_teen.png",
+  "art/pachy_adult.png",
+  "art/pachy_baby.png",
+  "art/pachy_teen.png",
+  "art/para_adult.png",
+  "art/para_baby.png",
+  "art/para_teen.png",
+  "art/plesio_adult.png",
+  "art/plesio_baby.png",
+  "art/plesio_teen.png",
+  "art/proto_adult.png",
+  "art/proto_baby.png",
+  "art/proto_teen.png",
+  "art/ptera_adult.png",
+  "art/ptera_baby.png",
+  "art/ptera_teen.png",
+  "art/raptor_adult.png",
+  "art/raptor_baby.png",
+  "art/raptor_teen.png",
+  "art/rex_adult.png",
+  "art/rex_baby.png",
+  "art/rex_teen.png",
+  "art/spino_adult.png",
+  "art/spino_baby.png",
+  "art/spino_teen.png",
+  "art/stego_adult.png",
+  "art/stego_baby.png",
+  "art/stego_teen.png",
+  "art/therizino_adult.png",
+  "art/therizino_baby.png",
+  "art/therizino_teen.png",
+  "art/trike_adult.png",
+  "art/trike_baby.png",
+  "art/trike_teen.png",
+  "ui/egg_0.png",
+  "ui/egg_1.png",
+  "ui/egg_10.png",
+  "ui/egg_11.png",
+  "ui/egg_2.png",
+  "ui/egg_3.png",
+  "ui/egg_4.png",
+  "ui/egg_5.png",
+  "ui/egg_6.png",
+  "ui/egg_7.png",
+  "ui/egg_8.png",
+  "ui/egg_9.png",
+  "ui/farewell.png",
+  "ui/farm.png",
+  "ui/food_feast.png",
+  "ui/food_meal.png",
+  "ui/food_snack.png",
+  "ui/meadow.png",
+  "ui/nest.png"
+ ]
+}

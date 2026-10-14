@@ -73,10 +73,24 @@ study-timer/
 │   ├── Info.plist          앱 이름, 번들 ID, 실행 파일 이름, 아이콘 이름, 버전
 │   └── Resources/          앱 안에 그대로 복사되는 파일들
 │       ├── index.html      화면과 기능 전부
+│       ├── pet.html        다마고치+ 펫 창(따로 뜨는 작은 창)
+│       ├── tama/
+│       │   ├── engine.js   다마고치 규칙(화면 없음, node로 시험 가능)
+│       │   ├── art.js      알 · 둥지 · 임시 공룡 그림(SVG), 팩 그림 연결
+│       │   ├── ui.js       펫 창 화면(펫 · 먹이 · 도감 · 농장 · 장면)
+│       │   ├── host.js     메인 화면 쪽: 받기 · 켜기 · 둥지 · 펫 창 연결
+│       │   └── tama.css    다마고치 화면 스타일
 │       ├── AppIcon.icns    앱 아이콘
 │       ├── wallpapers/     기본 배경 1.jpg, 2.jpg
 │       └── sounds/         기본 음악 6곡 (.caf, 무손실 ALAC)
+├── tama-pack/              다마고치+ 리소스 팩(앱이 GitHub에서 처음 한 번 받아요)
+│   ├── pack.json           숫자 · 등급 · 먹이 · 공룡 24종 · 받을 파일 목록(assets)
+│   ├── art/                <종>_<baby|teen|adult>.png (384px)
+│   └── ui/                 알 12종 · 둥지 · 먹이 · 초원 · 농장 · 작별 그림
+├── tama-art-src/raw/       ChatGPT가 그린 원본 그림
 ├── tools/
+│   ├── tama_art.py         원본 그림 → 배경 지우기 · 한 마리씩 자르기
+│   ├── pack_sync.py        pack.json의 assets 다시 채우기(+ --optimize 용량 줄이기)
 │   ├── make_icon.py        아이콘 만드는 스크립트
 │   ├── make_alarm_sounds.py  기본 음악 5곡 만드는 스크립트
 │   └── make_piano.py       '잔잔한 피아노' 만드는 스크립트
@@ -452,6 +466,30 @@ CSS 맨 위 `:root`에 색과 글꼴이 모여 있어요.
 - 빨강은 "지금 진행 중"에만 써요. 버튼은 흰색과 반투명 흰색만 써요.
 - `prefers-reduced-motion`이 켜져 있으면 모든 애니메이션을 꺼요.
 
+### 다마고치+ (`tama/`, `pet.html`, `tama-pack/`)
+
+- **규칙과 화면을 나눴어요.** `engine.js`는 상태 객체(`state.tama`)와 공부 기록만 받아서 계산해요. 화면 코드는 결과만 그려요.
+  - `refresh(t, ctx)`: 부화 날짜 기록 · 부화 · 성장 · 떠남을 처리하고 이벤트를 돌려줘요.
+  - `derive(t, ctx)`: 코인 잔액, 경험치, 배고픔, 오늘 공부 등 화면에 쓸 값.
+  - `act(t, {type, actId, …}, ctx)`: steal · choose · buy · feed · rename · toFarm · release. `actId`가 같으면 두 번 처리하지 않아요.
+  - `ctx = { now, pack, sessions, dayKey, goalSec }`. `now`를 바꾸면 시간을 당겨 시험할 수 있어요(화면에는 없음, 브라우저 콘솔에서 `__tamaTest.setClock(ms)`).
+- **코인과 경험치는 저장하지 않고 계산해요.** 코인 = 켜져 있던 구간(`ranges`)의 타이머 기록 합 ÷ 600초 + 보너스 날 × 20 − 쓴 코인. 그래서 두 번 지급되는 일이 없어요.
+- **숫자는 `pack.json`의 `config`에 있어요.** 최소 목표, 부화 일수, 코인 기준, 보너스, 경험치 기준, 배고픔 시간, 알 개수, 시작 먹이, 이름 길이.
+- **받기:** 앱은 `TAMA_BASE`(GitHub raw `main/tama-pack/`)에서 `pack.json`을 받고, 그 안 `assets` 목록의 파일을 하나씩 받아요. Mac 앱은 `TamaDownloader`(Swift)가 임시 폴더에 받아 다 끝나면 `Tama/`로 옮기고, 화면에서는 `ctwp://tama/<경로>`로 읽어요. 다음 실행부터는 `window.__TAMA_PACK__`로 바로 들어와요.
+- **펫 창:** Mac 앱은 `PetWindowController`(NSPanel + WKWebView `pet.html`). 메인 화면이 `petSync`로 상태를 보내고, 펫 창의 동작은 `pet` 메시지 → 메인 화면 `__petAction`으로 돌아와서 메인 쪽에서만 상태를 바꿔요. 브라우저에서는 iframe + `postMessage`로 같은 흐름이에요.
+
+#### 그림 추가 · 바꾸기
+
+1. 원본을 `tama-art-src/raw/`에 넣어요(흰 배경, 서로 떨어져 있게).
+2. 자르기:
+   - 한 줄 3마리: `python3 tools/tama_art.py sheet raw/<파일> <종id>`
+   - 3×3 격자(줄마다 한 종): `python3 tools/tama_art.py grid raw/<파일> id1,id2,id3`
+   - 소품 여러 개: `python3 tools/tama_art.py items raw/<파일> ui/a.png,ui/b.png <열 수> [크기]`
+   - 배경 · 큰 그림: `python3 tools/tama_art.py ui raw/<파일> ui/<이름>.png --size 768 [--cut]`
+3. `python3 tools/pack_sync.py --optimize`로 `assets`를 다시 채우고 용량을 줄여요.
+4. 새 종은 `pack.json`의 `species`에 `id · name · desc · rarity · img`를 더해요.
+5. `tama-pack/`을 GitHub `main`에 올려야 앱이 받을 수 있어요. 이미 받은 사람은 다시 받지 않으니, 팩을 바꾸면 `version`을 올리고 앱 쪽에서 다시 받게 해야 해요(아직 자동 갱신은 없어요).
+
 ---
 
 ## 8. 자주 하는 수정
@@ -556,6 +594,8 @@ touch ~/Desktop/캐릭터\ 타이머.app && killall Dock
 8. **v2.0**: 알림 문구 다듬기, 안 쓰는 코드 정리, 문서 정리 (자세한 이유는 [CHANGELOG.md](CHANGELOG.md))
 9. **v2.01**: 배경 위치·색·밝기·투명도, 달력 크기 고정, 과목 +N, 간소화 창 끌어서 옮기기
 10. **v3.01**: 글씨 색, 피그마식 색 고르기 + 저장한 색, 이번 주 그래프 색(자동/기본 색)과 미리 보기
+11. **v3.02**: 끝난 뒤 돌아오기 전까지 Dock 빨간 ! 표시
+12. **v3.10**: 다마고치+ (공룡 24종, 펫 창, 코인 · 상점, 도감, 농장)
 
 ### 다음에 해 볼 만한 것
 

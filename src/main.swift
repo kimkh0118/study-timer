@@ -15,6 +15,18 @@ let supportDir: URL = {
     return base
 }()
 let wallDir = supportDir.appendingPathComponent("Wallpapers", isDirectory: true)
+/// 다마고치+ 리소스 팩(처음 한 번 내려받아 여기에 둬요)
+let tamaDir = supportDir.appendingPathComponent("Tama", isDirectory: true)
+func loadTamaPackJSON() -> String {
+    guard let d = try? Data(contentsOf: tamaDir.appendingPathComponent("pack.json")),
+          (try? JSONSerialization.jsonObject(with: d)) != nil,
+          let s = String(data: d, encoding: .utf8) else { return "null" }
+    return s
+}
+/// 팩 안의 상대 경로가 안전한지(폴더 밖으로 못 나가게)
+func isSafeRelPath(_ p: String) -> Bool {
+    !p.isEmpty && !p.hasPrefix("/") && !p.contains("..") && p.range(of: "^[A-Za-z0-9_./-]+$", options: .regularExpression) != nil
+}
 let dataFile = supportDir.appendingPathComponent("data.json")
 let backupFile = supportDir.appendingPathComponent("data.backup.json")
 
@@ -43,6 +55,18 @@ func loadInitialJSON() -> String {
 final class WallpaperScheme: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {
         guard let url = task.request.url else { return }
+        if url.host == "tama" {                     // ctwp://tama/<팩 안 경로>
+            let rel = String(url.path.dropFirst())
+            guard isSafeRelPath(rel), let data = try? Data(contentsOf: tamaDir.appendingPathComponent(rel)) else {
+                task.didFailWithError(NSError(domain: "CharacterTimer", code: 404)); return
+            }
+            let ext = url.pathExtension.lowercased()
+            let mime = ext == "png" ? "image/png" : ext == "webp" ? "image/webp" : ext == "svg" ? "image/svg+xml" : ext == "json" ? "application/json" : "image/jpeg"
+            task.didReceive(URLResponse(url: url, mimeType: mime, expectedContentLength: data.count, textEncodingName: nil))
+            task.didReceive(data)
+            task.didFinish()
+            return
+        }
         let name = url.lastPathComponent
         let file = wallDir.appendingPathComponent(name)
         guard isSafeName(name), let data = try? Data(contentsOf: file) else {
@@ -347,6 +371,179 @@ final class FinishOverlay: NSObject {
 }
 
 // ───────── 화면(JS)과 Mac 사이의 연결 ─────────
+// ───────── 다마고치+ 리소스 내려받기(진행률 · 실패 시 다시 시도) ─────────
+final class TamaDownloader: NSObject, URLSessionDataDelegate {
+    var onProgress: (([String: Any]) -> Void)?
+    var onDone: (([String: Any]) -> Void)?
+    private var session: URLSession?
+    private var base = ""
+    private var current = ""
+    private var buffer = Data()
+    private var expected: Int64 = 0
+    private var phase = "pack"
+    private var packText = ""
+    private var queue: [String] = []
+    private var total = 0
+    private var index = 0
+    private var tmp: URL?
+    private(set) var running = false
+
+    func start(base: String) {
+        guard !running else { return }
+        guard base.hasPrefix("https://raw.githubusercontent.com/") else { onDone?(["ok": false, "error": "허용되지 않은 주소예요."]); return }
+        running = true
+        self.base = base; phase = "pack"; index = 0; total = 0; queue = []
+        let t = FileManager.default.temporaryDirectory.appendingPathComponent("tama-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: t, withIntermediateDirectories: true)
+        tmp = t
+        session = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: .main)
+        fetch("pack.json")
+    }
+    private func fetch(_ rel: String) {
+        current = rel; buffer = Data(); expected = 0
+        guard let u = URL(string: base + rel) else { fail("주소가 이상해요."); return }
+        session?.dataTask(with: URLRequest(url: u, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 30)).resume()
+    }
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        if let h = response as? HTTPURLResponse, h.statusCode != 200 {
+            completionHandler(.cancel)
+            fail("서버 응답 \(h.statusCode) (\(current))")
+            return
+        }
+        expected = response.expectedContentLength
+        completionHandler(.allow)
+    }
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        buffer.append(data)
+        if phase == "pack" { onProgress?(["phase": "pack", "done": buffer.count, "total": max(0, Int(expected)), "file": current]) }
+    }
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard running else { return }
+        if let e = error { fail(e.localizedDescription); return }
+        guard let t = tmp else { fail("임시 폴더를 만들 수 없어요."); return }
+        let dest = t.appendingPathComponent(current)
+        try? FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+        do { try buffer.write(to: dest) } catch { fail("파일을 저장하지 못했어요."); return }
+        if phase == "pack" {
+            guard let obj = try? JSONSerialization.jsonObject(with: buffer) as? [String: Any],
+                  let text = String(data: buffer, encoding: .utf8) else { fail("받은 팩 파일을 읽을 수 없어요."); return }
+            packText = text
+            let assets = (obj["assets"] as? [String] ?? []).filter(isSafeRelPath)
+            queue = assets; total = assets.count; phase = "assets"
+            onProgress?(["phase": "assets", "done": 0, "total": total, "file": ""])
+        } else {
+            index += 1
+            onProgress?(["phase": "assets", "done": index, "total": total, "file": current])
+        }
+        if queue.isEmpty { finish() } else { fetch(queue.removeFirst()) }
+    }
+    private func finish() {
+        guard let t = tmp else { return }
+        let fm = FileManager.default
+        try? fm.removeItem(at: tamaDir)
+        do { try fm.moveItem(at: t, to: tamaDir) } catch { fail("받은 파일을 옮기지 못했어요."); return }
+        running = false
+        session?.finishTasksAndInvalidate(); session = nil
+        onDone?(["ok": true, "pack": packText])
+    }
+    private func fail(_ msg: String) {
+        guard running else { return }
+        running = false
+        session?.invalidateAndCancel(); session = nil
+        if let t = tmp { try? FileManager.default.removeItem(at: t) }
+        onDone?(["ok": false, "error": msg])
+    }
+}
+
+// ───────── 다마고치+ 펫 창(따로 뜨는 작은 창) ─────────
+final class PetDragStrip: NSView {
+    override var mouseDownCanMoveWindow: Bool { true }
+    override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }
+}
+final class PetWindowController: NSObject, WKScriptMessageHandler, NSWindowDelegate {
+    weak var bridge: Bridge?
+    private var panel: NSPanel?
+    private var web: WKWebView?
+    private var lastJSON = "null"
+    var isOpen: Bool { panel?.isVisible ?? false }
+
+    func show(onTop: Bool, near main: NSWindow?) {
+        let first = panel == nil
+        if first { build() }
+        guard let p = panel else { return }
+        applyLevel(onTop)
+        if first, !p.setFrameUsingName("CharacterTimerPet"), let m = main {
+            // 처음엔 타이머 창 오른쪽 옆(자리가 없으면 안쪽 오른쪽 아래)
+            let vf = (m.screen ?? NSScreen.main)?.visibleFrame ?? m.frame
+            var x = m.frame.maxX + 12
+            if x + p.frame.width > vf.maxX { x = m.frame.maxX - p.frame.width - 20 }
+            p.setFrameOrigin(NSPoint(x: x, y: max(vf.minY + 20, m.frame.minY + 20)))
+        }
+        p.orderFront(nil)
+    }
+    func hide() { panel?.orderOut(nil) }
+    func applyLevel(_ onTop: Bool) {
+        guard let p = panel else { return }
+        p.level = onTop ? .floating : .normal
+        p.collectionBehavior = onTop ? [.canJoinAllSpaces, .fullScreenAuxiliary] : []
+    }
+    func sync(_ json: String) {
+        lastJSON = json
+        web?.evaluateJavaScript("window.__petSync && window.__petSync(\(json))")
+    }
+    private func build() {
+        let cfg = WKWebViewConfiguration()
+        cfg.setURLSchemeHandler(WallpaperScheme(), forURLScheme: "ctwp")
+        cfg.userContentController.add(self, name: "pet")
+        let w = WKWebView(frame: .zero, configuration: cfg)
+        w.setValue(false, forKey: "drawsBackground")
+        w.autoresizingMask = [.width, .height]
+        if let url = Bundle.main.url(forResource: "pet", withExtension: "html") {
+            w.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+        }
+        let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 340, height: 560),
+                        styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+                        backing: .buffered, defer: false)
+        p.title = "다마고치+"
+        p.titlebarAppearsTransparent = true
+        p.titleVisibility = .hidden
+        p.isReleasedWhenClosed = false
+        p.hidesOnDeactivate = false
+        p.isFloatingPanel = false
+        p.becomesKeyOnlyIfNeeded = false
+        p.isOpaque = false
+        p.backgroundColor = .clear
+        p.contentMinSize = NSSize(width: 320, height: 500)
+        p.contentMaxSize = NSSize(width: 420, height: 760)
+        p.delegate = self
+        let root = NSVisualEffectView(frame: p.contentRect(forFrameRect: p.frame))
+        root.material = .hudWindow
+        root.blendingMode = .behindWindow
+        root.state = .active
+        root.appearance = NSAppearance(named: .vibrantDark)
+        w.frame = root.bounds
+        root.addSubview(w)
+        let strip = PetDragStrip(frame: NSRect(x: 70, y: root.bounds.height - 28, width: root.bounds.width - 70, height: 28))
+        strip.autoresizingMask = [.width, .minYMargin]
+        root.addSubview(strip)
+        p.contentView = root
+        p.setFrameAutosaveName("CharacterTimerPet")
+        panel = p; web = w
+    }
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard let body = message.body as? [String: Any], let action = body["action"] as? [String: Any] else { return }
+        if (action["type"] as? String) == "ready" { sync(lastJSON) }
+        guard let d = try? JSONSerialization.data(withJSONObject: action), let s = String(data: d, encoding: .utf8) else { return }
+        bridge?.web?.evaluateJavaScript("window.__petAction && window.__petAction(\(s))")
+    }
+    // 닫기 버튼: 창은 숨기기만 하고(다시 열 때 빠르게), 메인 화면에 알려요
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        sender.orderOut(nil)
+        bridge?.web?.evaluateJavaScript("window.__petWindowClosed && window.__petWindowClosed()")
+        return false
+    }
+}
+
 final class Bridge: NSObject, WKScriptMessageHandler {
     weak var web: WKWebView?
     weak var window: NSWindow?
@@ -356,6 +553,8 @@ final class Bridge: NSObject, WKScriptMessageHandler {
     let sound = SoundPlayer()
     let volSound = SoundPlayer()      // 소리 크기 맞출 때만 쓰는 음악 (다른 소리와 따로)
     let overlay = FinishOverlay()
+    let pet = PetWindowController()
+    let tamaDL = TamaDownloader()
 
     private var fallbackVolume: Float = 0.8
     private var ringing = false      // 지금 소리가 진짜 알람인지(미리 듣기가 아니라)
@@ -363,6 +562,9 @@ final class Bridge: NSObject, WKScriptMessageHandler {
 
     override init() {
         super.init()
+        pet.bridge = self
+        tamaDL.onProgress = { [weak self] p in self?.sendJS("__tamaProgress", p) }
+        tamaDL.onDone = { [weak self] r in self?.sendJS("__tamaDone", r) }
         overlay.onAction = { [weak self] id in
             guard let self = self else { return }
             self.sound.stop()
@@ -442,6 +644,13 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         case "onTop":
             onTop = body["value"] as? Bool ?? false
             applyTopLevel()
+            pet.applyLevel(onTop)
+        case "petSync":
+            if let d = body["data"], let j = try? JSONSerialization.data(withJSONObject: d), let s = String(data: j, encoding: .utf8) { pet.sync(s) }
+        case "petWindow":
+            if body["open"] as? Bool ?? false { pet.show(onTop: body["onTop"] as? Bool ?? onTop, near: window) } else { pet.hide() }
+        case "tamaDownload":
+            tamaDL.start(base: body["base"] as? String ?? "")
         case "alarm":
             scheduleAlarm(at: body["at"] as? Double)
         case "busy":
@@ -791,7 +1000,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         config.setURLSchemeHandler(WallpaperScheme(), forURLScheme: "ctwp")
         let ucc = config.userContentController
         ucc.add(bridge, name: "ct")
-        ucc.addUserScript(WKUserScript(source: "window.__NATIVE__ = true; window.__INITIAL__ = \(loadInitialJSON());",
+        ucc.addUserScript(WKUserScript(source: "window.__NATIVE__ = true; window.__INITIAL__ = \(loadInitialJSON()); window.__TAMA_PACK__ = \(loadTamaPackJSON());",
                                        injectionTime: .atDocumentStart, forMainFrameOnly: true))
 
         let web = CTWebView(frame: .zero, configuration: config)
@@ -875,6 +1084,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         if let nf = bridge.normalFrame { window.setFrame(nf, display: false) }   // 다음에 켤 땐 원래 크기로
         bridge.sound.stop()
         bridge.overlay.close()
+        bridge.pet.hide()
     }
 }
 
