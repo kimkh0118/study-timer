@@ -458,8 +458,18 @@ final class Bridge: NSObject, WKScriptMessageHandler {
     /// 끄면 보통 창처럼 다른 창을 누르면 그 아래로 가요.
     func applyTopLevel() {
         guard let w = window else { return }
-        w.level = onTop ? .floating : .normal
-        w.collectionBehavior = (onTop && normalFrame != nil) ? [.canJoinAllSpaces, .fullScreenAuxiliary] : []
+        if onTop {
+            // 압정 켬: 모든 데스크탑에, 다른 앱이 전체 화면이어도 그 위에
+            w.styleMask.insert(.nonactivatingPanel)
+            w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            w.level = .floating
+            if w.isVisible { w.orderFrontRegardless() }
+        } else {
+            // 압정 끔: 보통 창
+            w.styleMask.remove(.nonactivatingPanel)
+            w.collectionBehavior = []
+            w.level = .normal
+        }
     }
 
     /// 웹 화면이 그려지지 않고 검게 남을 때 다시 그리게 해요.
@@ -723,6 +733,19 @@ final class CTWebView: WKWebView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
+/// 타이머 창. 보통 창처럼 쓰다가, 압정(항상 위에)을 켜면 다른 앱의 전체 화면 위에도 뜰 수 있게
+/// '패널' 종류로 만들었어요(보통 창은 macOS가 다른 앱의 전체 화면 위로 못 올라가게 막아요).
+final class MainPanel: NSPanel {
+    override init(contentRect: NSRect, styleMask style: NSWindow.StyleMask, backing: NSWindow.BackingStoreType, defer flag: Bool) {
+        super.init(contentRect: contentRect, styleMask: style, backing: backing, defer: flag)
+        hidesOnDeactivate = false          // 다른 앱을 눌러도 사라지지 않게
+        isFloatingPanel = false
+        becomesKeyOnlyIfNeeded = false
+    }
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 final class DragStrip: NSView {
     override var mouseDownCanMoveWindow: Bool { true }
     // 간소화 중에는 이 띠가 클릭을 가로채지 않고 아래 화면(끌어서 옮기기)으로 넘겨요
@@ -779,9 +802,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             web.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
         }
 
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1180, height: 760),
-                          styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-                          backing: .buffered, defer: false)
+        window = MainPanel(contentRect: NSRect(x: 0, y: 0, width: 1180, height: 760),
+                           styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                           backing: .buffered, defer: false)
         window.title = "캐릭터 타이머"
         window.isReleasedWhenClosed = false
         window.titlebarAppearsTransparent = true
