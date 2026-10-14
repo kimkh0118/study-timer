@@ -256,7 +256,9 @@ final class FinishOverlay: NSObject {
 
         let hasSong = !(songTitle ?? "").isEmpty
         let W: CGFloat = 540
-        let H: CGFloat = hasSong ? 200 : 172
+        let bodyLines = max(2, body.components(separatedBy: "\n").count)
+        let bodyH = CGFloat(bodyLines) * 20
+        let H: CGFloat = (hasSong ? 200 : 172) + bodyH - 40
         let x = screen.frame.midX - W / 2
         let y = screen.visibleFrame.maxY - H - 18     // 메뉴 막대 바로 아래
 
@@ -316,8 +318,7 @@ final class FinishOverlay: NSObject {
         let bodyLabel = NSTextField(wrappingLabelWithString: body)
         bodyLabel.font = .systemFont(ofSize: 14)
         bodyLabel.textColor = NSColor(white: 1, alpha: 0.72)
-        bodyLabel.maximumNumberOfLines = 2
-        let bodyH: CGFloat = 40
+        bodyLabel.maximumNumberOfLines = bodyLines
         bodyLabel.frame = NSRect(x: leftEdge, y: top - 40 - bodyH, width: textW, height: bodyH)
         glass.addSubview(bodyLabel)
 
@@ -456,10 +457,6 @@ final class TamaDownloader: NSObject, URLSessionDataDelegate {
 }
 
 // ───────── 다마고치+ 펫 창(따로 뜨는 작은 창) ─────────
-final class PetDragStrip: NSView {
-    override var mouseDownCanMoveWindow: Bool { true }
-    override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }
-}
 final class PetWindowController: NSObject, WKScriptMessageHandler, NSWindowDelegate {
     weak var bridge: Bridge?
     private var panel: NSPanel?
@@ -479,7 +476,7 @@ final class PetWindowController: NSObject, WKScriptMessageHandler, NSWindowDeleg
             if x + p.frame.width > vf.maxX { x = m.frame.maxX - p.frame.width - 20 }
             p.setFrameOrigin(NSPoint(x: x, y: max(vf.minY + 20, m.frame.minY + 20)))
         }
-        p.orderFront(nil)
+        p.makeKeyAndOrderFront(nil)
     }
     func hide() { panel?.orderOut(nil) }
     func applyLevel(_ onTop: Bool) {
@@ -502,13 +499,15 @@ final class PetWindowController: NSObject, WKScriptMessageHandler, NSWindowDeleg
             w.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
         }
         let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 340, height: 560),
-                        styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+                        styleMask: [.titled, .closable, .miniaturizable],
                         backing: .buffered, defer: false)
         p.title = "다마고치+"
-        p.titlebarAppearsTransparent = true
-        p.titleVisibility = .hidden
+        p.appearance = NSAppearance(named: .darkAqua)
+        p.titlebarAppearsTransparent = false
+        p.titleVisibility = .visible
         p.isReleasedWhenClosed = false
         p.hidesOnDeactivate = false
+        p.isMovable = true
         p.isFloatingPanel = false
         p.becomesKeyOnlyIfNeeded = false
         p.isOpaque = false
@@ -523,9 +522,6 @@ final class PetWindowController: NSObject, WKScriptMessageHandler, NSWindowDeleg
         root.appearance = NSAppearance(named: .vibrantDark)
         w.frame = root.bounds
         root.addSubview(w)
-        let strip = PetDragStrip(frame: NSRect(x: 70, y: root.bounds.height - 28, width: root.bounds.width - 70, height: 28))
-        strip.autoresizingMask = [.width, .minYMargin]
-        root.addSubview(strip)
         p.contentView = root
         p.setFrameAutosaveName("CharacterTimerPet")
         panel = p; web = w

@@ -23,7 +23,7 @@ TamaArt.assetFor = tamaAsset;
 
 function tamaSessions() {
   const out = state.sessions.map((s) => ({ start: s.start, sec: s.sec, manual: !!s.manual }));
-  if (run && run.phase === "focus" && run.startedAt) out.push({ start: run.sessionStart, sec: Math.floor(elapsed()), manual: false });
+  if (run && run.phase === "focus" && run.startedAt) out.push({ start: run.sessionStart, sec: Math.floor(elapsed()), manual: false, live: true });
   return out;
 }
 const tamaCtx = () => ({ now: tamaNow(), pack: tamaPack, sessions: tamaSessions(), dayKey, goalSec: state.settings.goalMin * 60 });
@@ -36,9 +36,15 @@ function tamaHandleEvents(events) {
   for (const e of events) {
     if (e.type === "bonus") toast(`오늘 목표 달성! 보너스 ${e.coins}코인`);
     else if (e.type === "eggDay") toast(`알이 따뜻해졌어요. 부화까지 ${e.count}/${tamaPack.config.hatchDays}일`);
-    else if (["hatch", "grow", "died"].includes(e.type)) {
-      T.fx.push({ id: Math.random().toString(36).slice(2, 9), ...e, at: tamaNow() });
-      tamaOpenPet(true);             // 부화·성장·떠남은 펫 창에서 보여 줘요
+    else if (e.type === "died") toast("친구가 떠났어요. 둥지에서 새 알을 골라 주세요");
+    else if (["hatch", "grow"].includes(e.type)) {
+      if (!T.pet || T.pet.dead) continue;
+      const id = `${T.pet.id}:${e.type}:${e.stage || "baby"}`;
+      if (!T.seen || typeof T.seen !== "object") T.seen = {};
+      if (T.seen[id] || T.fx.some(x => x.id === id)) continue;
+      T.seen[id] = true;
+      T.fx.push({ ...e, id, at: tamaNow() });
+      tamaOpenPet(true);             // 부화·성장은 펫 창에서 보여 줘요
     }
   }
 }
@@ -98,7 +104,7 @@ window.__petAction = (a) => {
   if (a.type === "goSteal") { tamaOpenPet(false); renderNest(true); toast("둥지에서 새 알을 골라 주세요"); }
   const r = TamaEngine.act(state.tama, a, tamaCtx());
   if (r.dup) return;
-  tamaLast = { actId: a.actId || null, ok: r.ok, msg: r.msg, type: a.type };
+  tamaLast = { actId: a.actId || null, ok: r.ok, msg: r.msg, type: a.type, food: a.food || null };
   if (r.events) tamaHandleEvents(r.events);
   writeNow();
   tamaRender();
@@ -193,13 +199,12 @@ function renderTama() {
   const box = $("#sheetBody");
   if (!tamaReady()) { $("#sheetExtra").innerHTML = ""; box.innerHTML = tamaIntroHTML(); return; }
   $("#sheetExtra").innerHTML = T.enabled ? `<div class="seg" role="tablist" aria-label="다마고치+">
-      ${[["home", "내 펫"], ["dex", "도감"], ["farm", "농장"], ["graves", "추억"]].map(([k, l]) => `<button role="tab" data-ttab="${k}" aria-selected="${tamaTab === k}">${l}</button>`).join("")}
+      ${[["home", "내 펫"], ["dex", "도감"], ["farm", "농장"]].map(([k, l]) => `<button role="tab" data-ttab="${k}" aria-selected="${tamaTab === k}">${l}</button>`).join("")}
     </div>` : "";
   const d = TamaEngine.derive(T, tamaCtx());
   if (!T.enabled) { box.innerHTML = tamaOffHTML(); return; }
   if (tamaTab === "dex") box.innerHTML = TamaUI.dexHTML(T, tamaPack, d);
   else if (tamaTab === "farm") box.innerHTML = TamaUI.farmHTML(T, tamaPack);
-  else if (tamaTab === "graves") box.innerHTML = TamaUI.gravesHTML(T, tamaPack);
   else box.innerHTML = tamaHomeHTML(d);
 }
 
@@ -256,7 +261,7 @@ function tamaHomeHTML(d) {
     <div class="tama-stats">
       <div><span class="hint">코인</span><b class="num">${Math.max(0, c.balance)}</b><small class="hint">다음 코인까지 ${Math.ceil(c.nextCoinSec / 60)}분</small></div>
       <div><span class="hint">도감</span><b class="num">${d.dexProgress.got} / ${d.dexProgress.total}</b><small class="hint">${Math.round(d.dexProgress.got / d.dexProgress.total * 100)}%</small></div>
-      <div><span class="hint">농장</span><b class="num">${T.farm.length}마리</b><small class="hint">떠난 친구 ${T.graves.length}</small></div>
+      <div><span class="hint">농장</span><b class="num">${T.farm.length}마리</b><small class="hint">성체가 된 친구들이 지내요</small></div>
     </div>
     <div class="set-row"><span>다마고치 모드<small class="hint" style="display:block;margin-top:2px">꺼도 펫의 배고픔 시간은 계속 흘러요</small></span>
       ${tamaAsk === "off" ? `<span class="tama-ask-btns"><button class="btn" data-tama="cancel">취소</button><button class="btn" data-tama="disable">끄기</button></span>` : `<button class="soft" data-tama="askOff">끄기</button>`}</div>

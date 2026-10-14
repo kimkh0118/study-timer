@@ -69,8 +69,28 @@
   .p-bubble { position: absolute; left: 62%; top: 16%; background: #fff; color: #3a3a46; font-weight: 700; padding: 6px 10px; border-radius: 12px; font-size: 12px; box-shadow: 0 4px 12px rgba(0,0,0,.15); animation: bob 1.8s ease-in-out infinite; }
   .p-stars { position: absolute; top: 14%; width: 100%; text-align: center; color: #fff6c8; letter-spacing: 14px; font-size: 16px; }
   @keyframes bob { 50% { transform: translateY(-4px); } }
-  #app.fed .p-pet { animation: chomp .8s ease; }
-  @keyframes chomp { 0%, 100% { transform: translateX(-50%) scale(1); } 30% { transform: translateX(-50%) scale(1.08, .92); } 60% { transform: translateX(-50%) scale(.96, 1.05) translateY(-6px); } }
+  .p-windowbar { position: absolute; top: 0; left: 76px; right: 14px; height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--dim); font-size: 11px; user-select: none; cursor: grab; }
+  .p-windowbar small { font-size: 10px; color: var(--faint); }
+  html.inframe .p-windowbar, html.native .p-windowbar { display: none; }
+  html.native #app { padding-top: 14px; }
+  #app { padding-top: 44px; }
+  .p-head { gap: 8px; }
+  .p-ava { width: 36px; height: 36px; }
+  .p-coin { padding-right: 9px; }
+  .p-screen.food-preview { flex: none; height: 125px; min-height: 125px; border-radius: 14px; box-shadow: none; }
+  .food-preview .p-pet { width: 53%; max-width: 155px; bottom: 4%; }
+  .food-preview .p-pet.egg { width: 22%; }
+  .p-feed-motion { position: absolute; inset: 0; pointer-events: none; }
+  .p-feed-food { position: absolute; width: 34px; height: 34px; left: 66%; bottom: 8%; animation: serveFood 1.6s ease both; }
+  .p-feed-food img, .p-feed-food svg { width: 100%; height: 100%; object-fit: contain; }
+  .p-feed-heart { position: absolute; width: 22px; height: 22px; left: 58%; top: 20%; color: #ff7f95; animation: feedHeart .6s 1s both; }
+  .p-feed-heart svg { width: 100%; height: 100%; }
+  .p-feed-label { position: absolute; top: 8px; left: 10px; padding: 4px 8px; border-radius: 8px; background: rgba(24,35,29,.78); color: #fff; font-size: 11px; }
+  .food-preview.feeding .p-pet { animation: feedNod .5s .4s 2; }
+  @keyframes feedNod { 0%,100% { transform: translateX(-50%); } 45% { transform: translateX(-50%) translateY(2px) rotate(3deg); } }
+  @keyframes serveFood { 0% { transform: translateY(-9px); opacity: 0; } 20%,65% { transform: none; opacity: 1; } 100% { transform: scale(.65); opacity: 0; } }
+  @keyframes feedHeart { from { transform: translateY(8px); opacity: 0; } 40% { opacity: 1; } to { transform: translateY(-10px); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .p-feed-food, .p-feed-heart { opacity: 1; } }
 
   /* 상태 카드 */
   .p-card { background: rgba(0,0,0,.28); border-radius: 18px; padding: 12px 14px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); display: flex; flex-direction: column; gap: 8px; flex: none; }
@@ -152,6 +172,22 @@
   .rare.r { background: rgba(106,166,255,.25); color: #b9d6ff; }
   .rare.s { background: linear-gradient(90deg, #ffd36e, #ff9ec7); color: #4a2b10; }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+  .p-nav { gap: 4px; padding-top: 4px; }
+  .p-tab { flex: 1; width: auto; height: 46px; border-radius: 12px; box-shadow: none; background: transparent; gap: 3px; }
+  .p-tab span { width: 19px; height: 19px; }
+  .p-tab.on { background: rgba(125,178,255,.16); box-shadow: none; color: #b6d3ff; }
+  .p-tab:hover { transform: none; background: rgba(255,255,255,.08); }
+  .p-food { gap: 8px; padding: 8px; border-radius: 10px; }
+  .p-food-art { width: 34px; height: 34px; }
+  .p-food-txt b { font-size: 12px; }
+  .p-food-txt .num { color: var(--dim); font-weight: 400; }
+  .p-food-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+  .p-food-actions .p-btn { height: 28px; padding: 0 10px; font-size: 11px; border-radius: 8px; }
+  .p-food-actions .p-btn.primary { box-shadow: none; }
+  .p-food-actions .buy { background: transparent; color: var(--dim); }
+  .p-food-actions .coin-ic { width: 13px; height: 13px; }
+  .p-note, .p-h4 small { color: var(--dim); }
 </style>
 </head>
 <body>

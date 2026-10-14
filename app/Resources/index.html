@@ -1036,6 +1036,7 @@ function start() {
   hideAlert();
   waitingBack = false;                         // 다시 시작했으니 Dock 빨간 표시 끄기
   if (!run) run = { phase: "focus", target: plannedSec(), before: 0, startedAt: null, sessionStart: Date.now(), subject: state.settings.subject };
+  if (run.phase === "focus" && run.coinStartEarned === undefined) run.coinStartEarned = studyCoinSnapshot()?.earned ?? null;
   run.startedAt = Date.now();
   scheduleAlarm();
   post("busy", { value: true });
@@ -1070,11 +1071,34 @@ function clearRun() {
 }
 function stopByUser() {
   if (!run) return;
+  const r = run;
   hideAlert();
-  if (run.phase === "focus") commitFocus();
+  let sec = null;
+  if (run.phase === "focus") sec = commitFocus();
   else pomoRound = run.kind === "long" ? 1 : pomoRound + 1;
   clearRun();
   renderAll();
+  if (r.phase === "focus") {
+    const body = studyEndBody(`${focusLine(subjectOf(r.subject).name, sec)}\n${todayLine()}`, r);
+    if (NATIVE) post("finish", { title: "공부 종료", body, sound: { type: "none" }, volume: 0, overlay: true, maxSec: 1,
+      image: currentWall().src, focus: posOf(currentWall()), actions: [{ id: "ok", label: "확인" }] });
+    else showAlert("공부 종료", body, [["ok", "확인"]], currentWall().src);
+  }
+}
+function studyCoinSnapshot() {
+  if (typeof tamaReady !== "function" || !tamaReady()) return null;
+  // 진행 중인 공부를 빼고 확정된 기록만 계산해 중복 지급/표시를 막아요.
+  return TamaEngine.coinInfo(state.tama, { ...tamaCtx(), sessions: state.sessions });
+}
+function studyEndBody(body, finishedRun) {
+  if (!studyCoinSnapshot()) return body;
+  const events = TamaEngine.refresh(state.tama, tamaCtx());
+  if (events.length) tamaHandleEvents(events);
+  writeNow();
+  tamaRender();
+  const coins = studyCoinSnapshot();
+  const earned = Math.max(0, coins.earned - (finishedRun.coinStartEarned ?? coins.earned));
+  return `${body}\n이번 공부 +${earned.toLocaleString()}코인\n현재 잔액 ${Math.max(0, coins.balance).toLocaleString()}코인`;
 }
 /* 알림 문구: "수학 50분 집중했어요" / "오늘 2시간 30분 · 목표까지 1시간 30분" */
 function focusLine(subj, sec) {
@@ -1098,14 +1122,14 @@ function complete() {
       scheduleAlarm();
       renderAll();
       notify("focus", "집중 끝",
-        `${focusLine(subj, sec)}\n이제 ${min}분 쉬어요`,
+        studyEndBody(`${focusLine(subj, sec)}\n이제 ${min}분 쉬어요`, r),
         [["ok", "확인"], ["skipBreak", "휴식 건너뛰기"]]);
       return;
     }
     clearRun();
     renderAll();
     notify("focus", "집중 끝",
-      `${focusLine(subj, sec)}\n${todayLine()}`,
+      studyEndBody(`${focusLine(subj, sec)}\n${todayLine()}`, r),
       [["ok", "확인"], ["more5", "5분 더"]]);
     return;
   }

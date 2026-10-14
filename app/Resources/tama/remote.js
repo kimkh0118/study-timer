@@ -37,7 +37,7 @@
     now: () => setClock(0),
     // 공부
     s1: () => addStudy(1),
-    s4: () => addStudy(4.05),
+    s4: () => addStudy(4),
     s10: () => addStudy(10),
     // 하루 목표 채운 날로 하루 넘기기: 다음 날로 가서 4시간 공부
     day: () => { setClock((window.__tamaClock || 0) + DAY); addStudy(Math.max(4.05, state.settings.goalMin / 60 + 0.05)); },
@@ -54,9 +54,14 @@
       p.lastFedAt = tamaNow(); writeNow(); tamaTick(); },
     // 목표 · 모드
     goal2: () => { if (T().enabled) TamaEngine.setEnabled(T(), false, tamaNow(), tamaPack);
+      if (T().winOpen) tamaOpenPet(false);
       state.settings.goalMin = 120; writeNow(); renderAll(); tamaTick(); toast("모드를 끄고 목표를 2시간으로 바꿨어요. 다시 켜면 4시간 안내가 떠요"); },
     // 정리
     clearTest: () => { const before = state.sessions.length; state.sessions = state.sessions.filter((s) => !s.test);
+      // 테스트로 번 코인은 같이 없애요: 코인 장부를 새로 잡고(지운 만큼 남겨 두지 않게), 미래 날짜 보너스도 지워요
+      T().coinRaw = null;
+      const today = dayKey(Date.now());
+      for (const k of Object.keys(T().bonusDays)) if (k > today) delete T().bonusDays[k];
       writeNow(); renderAll(); tamaTick(); toast(`테스트 공부 기록 ${before - state.sessions.length}개를 지웠어요`); },
     reset: () => { const keep = { installed: T().installed, packVersion: T().packVersion };
       state.tama = Object.assign(TamaEngine.defaultState(), keep, { fx: [] }); window.__tamaClock = 0;
@@ -91,7 +96,7 @@
       `테스트 시각 ${fmt(tamaNow())}${off ? ` (실제보다 ${Math.round(off / HOUR)}시간 뒤)` : " (지금)"}`,
       `모드 ${t.enabled ? "켜짐" : "꺼짐"} · 목표 ${Math.round(state.settings.goalMin / 6) / 10}시간 · 코인 ${d.coins.balance}`,
       !p ? "키우는 펫 없음" : p.stage === "egg" ? `알 · 부화 ${d.egg.count}/${d.egg.need}일 · 오늘 ${fmtDur(d.egg.todaySec)}`
-        : `${p.name} · ${({ baby: "아기", teen: "아성체", adult: "성체" })[p.stage]} · XP ${d.xp ? d.xp.xp : 0}${p.dead ? " · 떠남" : ` · 급식 ${Math.floor((tamaNow() - p.lastFedAt) / HOUR)}시간 전`}`,
+        : `${p.name} · ${({ baby: "아기", teen: "아성체", adult: "성체" })[p.stage]} · XP ${d.xp ? d.xp.xp : 0}${p.dead ? " · 떠남" : ` · 급식 ${Math.max(0, Math.floor((tamaNow() - p.lastFedAt) / HOUR))}시간 전`}`,
     ];
     el.innerHTML = lines.map((l) => `<div>${esc(l)}</div>`).join("");
   }

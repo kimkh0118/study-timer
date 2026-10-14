@@ -36,12 +36,6 @@
         return `<div class="farm-row"><div class="farm-thumb">${art(pack, sp, "adult")}</div><div><b>${esc(f.name)}</b><div class="hint">${esc(sp ? sp.name : f.species)} · ${fmtDate(f.movedAt)} 농장 이동 · 애정 ${f.love || 0}</div></div><code class="farm-id">#${esc(String(f.id).slice(0, 6))}</code></div>`; }).join("")}</div></div>`;
   }
 
-  function gravesHTML(T, pack) {
-    if (!T.graves.length) return `<div class="tama-empty-msg"><p>떠난 친구가 없어요.<br><small>마지막 급식 후 72시간이 지나면 펫이 떠나요.</small></p></div>`;
-    return `<div class="farm-list">${T.graves.slice().reverse().map((g) => { const sp = root.TamaEngine.speciesOf(pack, g.species);
-      return `<div class="farm-row grave"><div class="farm-thumb">${art(pack, sp, g.stage === "egg" ? "baby" : g.stage, { silhouette: false })}</div><div><b>${esc(g.name)}</b><div class="hint">${esc(sp ? sp.name : g.species)} · ${({ baby: "아기", teen: "아성체", adult: "성체" })[g.stage] || ""} · ${fmtDate(g.diedAt)}에 떠났어요</div></div></div>`; }).join("")}</div>`;
-  }
-
   /* ───────── 펫 창 앱 ───────── */
   const ICON = {
     pet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10.5c0-3.3 2.2-6 5-6s5 2.7 5 6v2.5c0 3.6-2.2 6.5-5 6.5s-5-2.9-5-6.5z"/><path d="M9.6 11.2h.01M14.4 11.2h.01M10.5 14.5c1 .7 2 .7 3 0"/><path d="M8 6.5L6 4M16 6.5L18 4"/></svg>',
@@ -60,23 +54,34 @@
   const HUNGER = { full: ["배부름", "ok"], hungry: ["배고픔", "warn"], very: ["매우 배고픔", "bad"], dead: ["떠남", "dead"] };
 
   function mountPet(rootEl, send) {
-    let D = null, recvAt = 0, tab = "pet", editing = false, pending = new Set(), confirmFarm = false, lastShown = null;
+    const acknowledgedFx = new Set();
+    let renderedFxId = null;
+    let D = null, recvAt = 0, tab = "pet", editing = false, pending = new Map(), confirmFarm = false, lastShown = null, feeding = false;
     const nowMs = () => (D ? D.now + (Date.now() - recvAt) : Date.now());
     const go = (a) => {
       const key = a.type + ":" + (a.food || a.eggId || "");
       if (pending.has(key)) return;                // 응답 오기 전 같은 동작 막기(빠른 연속 클릭)
-      pending.add(key);
       a.actId = Math.random().toString(36).slice(2, 10);
+      pending.set(key, a.actId);
       a.key = key;
       send(a);
-      setTimeout(() => pending.delete(key), 1500);
+      setTimeout(() => {
+        if (pending.get(key) !== a.actId) return;
+        pending.delete(key);
+        if (!editing && !feeding) render();
+      }, 1500);
     };
     const toastEl = document.createElement("div"); toastEl.className = "p-toast";
     let toastT;
     const toast = (m) => { if (!m) return; toastEl.textContent = m; toastEl.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove("show"), 2400); };
 
     function render() {
+      if (feeding) return; // 주기적 동기화가 먹는 모션을 중간에 재시작하지 않게 해요.
       if (!D || !D.pack) { rootEl.innerHTML = `<div class="p-wait">불러오는 중…</div>`; return; }
+      const fx = (D.tama.fx || []).find(x => !acknowledgedFx.has(x.id));
+      // 같은 이벤트의 DOM을 교체하면 CSS 부화/성장 모션이 다시 시작돼요.
+      if (fx && renderedFxId === fx.id && rootEl.querySelector(".p-fx")) return;
+      renderedFxId = fx ? fx.id : null;
       root.TamaArt.imageFor = (sp, st) => { const p = sp.img && sp.img[st]; return p && (D.pack.assets || []).includes(p) ? D.assetBase + p : null; };
       root.TamaArt.assetFor = (p) => (p && (D.pack.assets || []).includes(p) ? D.assetBase + p : null);
       const T = D.tama, d = D.derived, pack = D.pack, p = T.pet, sp = d && d.species;
@@ -85,7 +90,7 @@
       const title = !p ? "빈 둥지" : stage === "egg" ? "수수께끼 알" : p.name;
       const chip = !p ? "" : p.dead ? `<span class="p-chip dead">떠남</span>` : `<span class="p-chip">${({ egg: "알", baby: "아기", teen: "아성체", adult: "성체" })[stage]}</span>`;
       const avatar = !p ? "" : stage === "egg" ? root.TamaArt.eggSVG(p.look) : art(pack, sp, stage);
-      const head = `<header class="p-head">
+      const head = `<div class="p-windowbar" aria-label="상단을 드래그하여 창 이동"><span>다마고치+</span><small>드래그하여 이동</small></div><header class="p-head">
         <div class="p-ava">${avatar}</div>
         <div class="p-id">${editing && p && stage !== "egg" ? `<input class="p-name-in" id="pName" maxlength="${pack.config.nameMax || 10}" value="${esc(p.name)}" aria-label="펫 이름">`
           : `<b class="p-name">${esc(title)}</b>${p && stage !== "egg" && !p.dead ? `<button class="p-pen" data-p="edit" title="이름 바꾸기" aria-label="이름 바꾸기">${ICON.pencil}</button>` : ""}`}
@@ -95,10 +100,18 @@
       if (tab === "pet") body = petTab(T, d, pack, p, sp);
       else if (tab === "food") body = foodTab(T, d, pack, p, coins);
       else if (tab === "dex") body = `<div class="p-scroll">${dexHTML(T, pack, d)}</div>`;
-      else body = `<div class="p-scroll">${farmHTML(T, pack)}${T.graves.length ? `<h4 class="p-h4">떠난 친구들</h4>${gravesHTML(T, pack)}` : ""}</div>`;
+      else body = `<div class="p-scroll">${farmHTML(T, pack)}</div>`;
       const nav = `<nav class="p-nav">${[["pet", "펫"], ["food", "먹이"], ["dex", "도감"], ["farm", "농장"]].map(([k, l]) =>
-        `<button class="p-tab ${tab === k ? "on" : ""}" data-tab="${k}"><span>${ICON[k]}</span><small>${l}</small></button>`).join("")}</nav>`;
+        `<button class="p-tab ${tab === k ? "on" : ""}" data-tab="${k}" aria-current="${tab === k ? "page" : "false"}"><span>${ICON[k]}</span><small>${l}</small></button>`).join("")}</nav>`;
+      const scroll = rootEl.querySelector(".p-scroll");
+      const scrollTop = scroll ? scroll.scrollTop : 0;
       rootEl.innerHTML = head + `<main class="p-main">${body}</main>` + nav + fxHTML(T, pack) + farmConfirmHTML(p, sp, pack);
+      const nextScroll = rootEl.querySelector(".p-scroll");
+      if (nextScroll) nextScroll.scrollTop = scrollTop;
+      rootEl.querySelectorAll("[data-feed],[data-buy]").forEach((b) => {
+        const type = b.dataset.feed ? "feed" : "buy", food = b.dataset.feed || b.dataset.buy;
+        if (pending.has(type + ":" + food)) b.disabled = true;
+      });
       rootEl.appendChild(toastEl);
       const inp = rootEl.querySelector("#pName");
       if (inp) { inp.focus(); inp.select(); }
@@ -148,26 +161,39 @@
 
     function foodTab(T, d, pack, p, coins) {
       const canFeed = p && p.stage !== "egg" && !p.dead;
+      const sp = d.species;
+      const preview = canFeed ? screen(`<div class="p-pet happy">${art(pack, sp, p.stage)}</div>`, "food-preview")
+        : p && p.stage === "egg" ? screen(`<div class="p-pet egg">${root.TamaArt.eggSVG(p.look)}</div>`, "food-preview") : "";
       const inv = pack.foods.map((f) => {
         const n = T.inventory[f.id] || 0;
         return `<div class="p-food"><div class="p-food-art">${foodArt(f)}</div><div class="p-food-txt"><b>${esc(f.name)} <span class="num">× ${n}</span></b><small>애정 +${f.love}</small></div>
-          <button class="p-btn ${canFeed && n ? "primary" : ""}" data-feed="${f.id}" ${canFeed && n ? "" : "disabled"} title="${!canFeed ? (p && p.stage === "egg" ? "알은 아직 먹지 않아요" : "먹이를 줄 친구가 없어요") : n ? "" : "가진 먹이가 없어요"}">먹이기</button></div>`;
+          <div class="p-food-actions"><button class="p-btn ${canFeed && n ? "primary" : ""}" data-feed="${f.id}" ${canFeed && n ? "" : "disabled"} aria-label="${esc(f.name)} 먹이기">먹이기</button>
+          <button class="p-btn buy" data-buy="${f.id}" ${coins < f.price ? "disabled" : ""} aria-label="${esc(f.name)} 구매 ${f.price}코인">구매 ${f.price}${coinSVG}</button></div></div>`;
       }).join("");
-      const shop = pack.foods.map((f) => {
-        const lack = f.price - coins;
-        return `<div class="p-food"><div class="p-food-art">${foodArt(f)}</div><div class="p-food-txt"><b>${esc(f.name)}</b><small>${esc(f.desc)}</small></div>
-          <button class="p-btn buy ${lack > 0 ? "" : "primary"}" data-buy="${f.id}" ${lack > 0 ? "disabled" : ""}>${coinSVG}<span class="num">${f.price}</span></button>
-          ${lack > 0 ? `<em class="p-lack">${lack}코인 모자라요</em>` : ""}</div>`;
-      }).join("");
-      return `<div class="p-scroll">
-        <h4 class="p-h4">가방 <small>먹이를 사도 급식 시간은 그대로예요. 먹였을 때만 바뀌어요.</small></h4>${inv}
-        <h4 class="p-h4">상점 <small>공부 10분 = 1코인 · 목표 달성한 날 +${pack.config.goalBonusCoins}</small></h4>${shop}
-        <p class="p-note">다음 코인까지 공부 ${Math.ceil(d.coins.nextCoinSec / 60)}분</p></div>`;
+      return preview + `<div class="p-scroll"><h4 class="p-h4">먹이 가방 <small>${canFeed ? "먹이를 주면 배부름과 애정이 올라가요." : p && p.stage === "egg" ? "알이 부화하면 먹이를 줄 수 있어요." : "키우는 친구가 생기면 먹이를 줄 수 있어요."}</small></h4>${inv}
+        <p class="p-note">구매한 먹이는 가방에 보관돼요 · 공부 10분 = 1코인</p></div>`;
     }
     const foodArt = (f) => (D.pack.assets || []).includes(`ui/food_${f.id}.png`) ? `<img src="${D.assetBase}ui/food_${f.id}.png" alt="">` : (FOOD_ART[f.id] || FOOD_ART.snack);
 
+    function playFeed(foodId) {
+      const p = D.tama.pet, f = D.pack.foods.find((x) => x.id === foodId);
+      if (!p || p.dead || p.stage === "egg" || !f) return;
+      feeding = true;
+      const scene = rootEl.querySelector(".food-preview");
+      if (!scene) { feeding = false; return; }
+      const fx = document.createElement("div");
+      fx.className = "p-feed-motion";
+      fx.setAttribute("role", "status");
+      fx.setAttribute("aria-label", `${p.name}에게 ${f.name} 먹이는 중`);
+      fx.innerHTML = `<div class="p-feed-food">${foodArt(f)}</div><div class="p-feed-heart">${ICON.heart}</div><span class="p-feed-label">냠냠! 애정 +${f.love}</span>`;
+      scene.appendChild(fx);
+      scene.classList.add("feeding");
+      rootEl.querySelectorAll("[data-feed],[data-buy]").forEach(b => b.disabled = true);
+      setTimeout(() => { feeding = false; fx.remove(); scene.classList.remove("feeding"); render(); }, 1800);
+    }
+
     function fxHTML(T, pack) {
-      const fx = (T.fx || [])[0];
+      const fx = (T.fx || []).find(x => !acknowledgedFx.has(x.id));
       if (!fx) return "";
       const p = T.pet, sp = p ? root.TamaEngine.speciesOf(pack, p.species) : null;
       if (fx.type === "hatch" && sp) {
@@ -196,8 +222,17 @@
     rootEl.addEventListener("click", (e) => {
       const t = e.target.closest("[data-tab],[data-p],[data-feed],[data-buy],[data-ack]");
       if (!t || t.disabled) return;
-      if (t.dataset.tab) { tab = t.dataset.tab; render(); return; }
-      if (t.dataset.ack) { send({ type: "ack", fxId: t.dataset.ack }); D.tama.fx = D.tama.fx.filter((x) => x.id !== t.dataset.ack); render(); return; }
+      if (feeding) return;
+      if (t.dataset.tab) { tab = t.dataset.tab; const s = rootEl.querySelector(".p-scroll"); if (s) s.scrollTop = 0; render(); return; }
+      if (t.dataset.ack) {
+        const id = t.dataset.ack;
+        if (acknowledgedFx.has(id)) return;
+        acknowledgedFx.add(id);
+        D.tama.fx = D.tama.fx.filter(x => x.id !== id);
+        render();
+        send({ type: "ack", fxId: id });
+        return;
+      }
       if (t.dataset.feed) { t.disabled = true; go({ type: "feed", food: t.dataset.feed }); return; }
       if (t.dataset.buy) { t.disabled = true; go({ type: "buy", food: t.dataset.buy, qty: 1 }); return; }
       const k = t.dataset.p;
@@ -220,9 +255,13 @@
         D = data; recvAt = Date.now();
         if (data.last && data.last.actId && data.last.actId !== lastShown) {
           lastShown = data.last.actId;
-          toast(data.last.msg);
-          pending.clear();
-          if (data.last.ok && data.last.type === "feed") rootEl.classList.add("fed"), setTimeout(() => rootEl.classList.remove("fed"), 900);
+          const key = [...pending.keys()].find((k) => pending.get(k) === data.last.actId);
+          if (key && !(data.last.ok && data.last.type === "feed")) toast(data.last.msg);
+          if (key) pending.delete(key);
+          if (key && data.last.ok && data.last.type === "feed") {
+            render();
+            playFeed(data.last.food || key.slice(5));
+          }
         }
         if (editing) return;              // 이름 고치는 중에는 다시 그리지 않아요
         render();
@@ -234,5 +273,5 @@
   function fmtHM(sec) { const m = Math.floor(sec / 60), h = Math.floor(m / 60); return h ? `${h}시간${m % 60 ? ` ${m % 60}분` : ""}` : `${m}분`; }
   function ago(ms) { const m = Math.max(0, Math.floor(ms / 60000)); if (m < 1) return "방금"; if (m < 60) return `${m}분 전`; const h = Math.floor(m / 60); return h < 24 ? `${h}시간 전` : `${Math.floor(h / 24)}일 ${h % 24}시간 전`; }
 
-  root.TamaUI = { dexHTML, farmHTML, gravesHTML, mountPet, fmtHM };
+  root.TamaUI = { dexHTML, farmHTML, mountPet, fmtHM };
 })(typeof window !== "undefined" ? window : globalThis);
