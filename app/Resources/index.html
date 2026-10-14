@@ -476,9 +476,8 @@
 
   /* ───────── 간소화 ───────── */
   .mini { display: none; }
-  /* 간소화 창에서는 크게 흐린 배경을 끄고 가벼운 배경을 써요(창을 옮길 때 검게 변하던 문제) */
-  .app.compact > :not(.mini):not(.toast):not(.alert) { display: none !important; }
-  .app.compact { background: linear-gradient(120deg, rgba(35,35,42,var(--bg-alpha, 1)), rgba(14,14,18,var(--bg-alpha, 1))); }
+  /* 간소화 창도 큰 창과 같은 배경(사진 흐림 또는 고른 색 · 밝기 · 투명도)을 그대로 써요 */
+  .app.compact > :not(.mini):not(.toast):not(.alert):not(.bg-clip):not(.bg-solid):not(.dim) { display: none !important; }
   .app.compact { grid-template-columns: 1fr; }
   .app.compact .mini {
     display: grid; grid-template-columns: auto 1fr; height: 100vh; width: 100vw; position: relative; z-index: 1;
@@ -486,9 +485,8 @@
   }
   @keyframes miniIn { from { opacity: 0; transform: scale(1.03); } }
   .mini-art { height: 100vh; aspect-ratio: 1 / 1; overflow: hidden; }
-  .mini-art img { width: 100%; height: 100%; object-fit: cover; display: block;
-    -webkit-mask-image: linear-gradient(to right, #000 70%, transparent); mask-image: linear-gradient(to right, #000 70%, transparent);
-    transform: translateZ(0); }
+  .mini-art img { width: 100%; height: 100%; object-fit: cover; display: block; transform: translateZ(0); }   /* 큰 창처럼 깔끔하게 나눠요 */
+  .mini-body { padding-left: 16px !important; }
   .mini-body { min-width: 0; display: flex; flex-direction: column; justify-content: center; padding: 14px 16px 14px 4px; }
   .mini-sub { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--dim); white-space: nowrap; overflow: hidden; }
   .mini-sub > span:last-child { overflow: hidden; text-overflow: ellipsis; }
