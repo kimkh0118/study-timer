@@ -271,13 +271,12 @@
 
   .week-head { display: flex; justify-content: space-between; align-items: baseline; }
   .streak { font-size: 12px; color: var(--dim); }
-  /* 이번 주: 처음 모양 그대로, 색만 한 가지(오늘은 진하게) */
+  /* 이번 주: 처음 모양 그대로, 막대는 모두 같은 한 가지 색 */
   .bars { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; align-items: end; margin-top: 10px; min-height: 60px; }
   .bar-col { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
   .bar-col .b { width: 100%; max-width: 26px; border-radius: 6px; min-height: 3px; transition: height .4s;
-    background: #f08a8d; background: color-mix(in srgb, var(--pin) 55%, #fff); }
+    background: #6c8cff; }
   .bar-col.empty .b { background: rgba(255,255,255,.14); }
-  .bar-col.today .b { background: var(--pin); }
   .bar-col span { font-size: 11px; color: var(--faint); }
   .bar-col.today span { color: var(--text); font-weight: 700; }
 
@@ -1643,11 +1642,6 @@ $("#sheetBody").addEventListener("click", (e) => {
   else if (t.dataset.adjustpos !== undefined) startAdjust();
   else if (t.dataset.bgc !== undefined) { state.settings.bgColor = t.dataset.bgc; applyBgColor(); markSwatch(); save(); }
   else if (t.dataset.ink) { state.settings.ink = t.dataset.ink; applyInk(); markSwatch(); save(); }
-  else if (t.dataset.bgsave !== undefined) {
-    const s = state.settings;
-    if (s.bgColor && !s.bgCustom.includes(s.bgColor)) s.bgCustom = [...s.bgCustom, s.bgColor].slice(-16);
-    markSwatch(); save();
-  }
   else if (t.dataset.bgdel) {
     const s = state.settings;
     s.bgCustom = s.bgCustom.filter((x) => x !== t.dataset.bgdel);
@@ -1660,12 +1654,8 @@ function bgColorsHTML() {
   const c = state.settings.bgColor, ink = state.settings.ink || "auto";
   return `<div class="bg-row"><span class="hint">오른쪽 배경</span>
       <button class="swatch bg-pick photo" data-bgc="" aria-pressed="${!c}" title="사진" aria-label="사진"></button>
-      <button class="swatch bg-pick ${c ? "" : "empty"}" id="bgPick" aria-pressed="${!!c}" style="${c ? `background:${c}` : ""}" title="색 고르기" aria-label="색 고르기"></button>
-      <span class="hint">${c ? c.toUpperCase() : "색을 눌러 고르기"}</span></div>
-    <div class="bg-row"><span class="hint">저장한 색</span>
-      ${state.settings.bgCustom.map((col) => `<span class="swatch-wrap"><button class="swatch" data-bgc="${col}" style="background:${col}" aria-pressed="${c === col}" aria-label="${col}" title="${col.toUpperCase()}"></button><button class="swatch-del" data-bgdel="${col}" aria-label="${col} 지우기">${X_ICON}</button></span>`).join("")}
-      <button class="swatch custom" data-bgsave ${c && !state.settings.bgCustom.includes(c) ? "" : "disabled"} title="지금 배경 색 저장" aria-label="지금 배경 색 저장"><span>${PLUS_ICON}</span></button>
-      ${state.settings.bgCustom.length ? "" : `<span class="hint">색을 고른 뒤 + 로 저장해 두면 다시 쓸 수 있어요</span>`}</div>
+      ${state.settings.bgCustom.map((col) => `<span class="swatch-wrap"><button class="swatch bg-pick" data-bgc="${col}" style="background:${col}" aria-pressed="${c === col}" aria-label="${col}" title="${col.toUpperCase()}"></button><button class="swatch-del" data-bgdel="${col}" aria-label="${col} 지우기">${X_ICON}</button></span>`).join("")}
+      <button class="swatch custom bg-pick" id="bgPick" title="색 추가" aria-label="색 추가"><span>${PLUS_ICON}</span></button></div>
     <div class="bg-row"><span class="hint">글씨 색</span>
       <div class="seg" role="tablist" aria-label="글씨 색">
         ${[["auto", "자동"], ["light", "흰 글씨"], ["dark", "검정 글씨"]].map(([v, l]) => `<button role="tab" data-ink="${v}" aria-selected="${ink === v}">${l}</button>`).join("")}
@@ -1680,13 +1670,15 @@ function markSwatch() {
 function bindBgPick() {
   const pick = $("#bgPick");
   if (!pick) return;
+  // + → 색 고르기. 고르는 동안 미리 보기, 닫으면 그 색을 '오른쪽 배경' 줄에 추가하고 적용
   pick.onclick = () => {
-    const s = state.settings;
-    openColorPop(pick, s.bgColor || "#cfe8ff", (col, done) => {
+    const s = state.settings, before = s.bgColor, start = toHex(before || "#cfe8ff");
+    openColorPop(pick, start, (col, done) => {
       s.bgColor = col; applyBgColor();
-      pick.style.background = col; pick.classList.remove("empty");
-      if (pick.nextElementSibling) pick.nextElementSibling.textContent = col.toUpperCase();
-      if (done) { save(); markSwatch(); }
+      if (!done) return;
+      if (col === start) { s.bgColor = before; applyBgColor(); markSwatch(); return; }   // 색을 안 바꾸고 닫으면 그대로
+      if (!s.bgCustom.includes(col)) s.bgCustom = [...s.bgCustom, col].slice(-16);
+      save(); markSwatch();
     });
   };
 }
