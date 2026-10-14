@@ -753,6 +753,8 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const pad = (n) => String(n).padStart(2, "0");
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const COLORS = ["#e0262c", "#f1c232", "#4f8cff", "#34c27a", "#b18cff", "#ff8a3d", "#2fc6d6", "#c9c9cf"];
+// 오른쪽 배경 기본 색 12개 (저장 데이터 정리(migrate)에서도 쓰니까 맨 위에)
+const BG_COLORS = ["#1c1c1e", "#3a3a3c", "#1e3a8a", "#2563eb", "#059669", "#ea580c", "#dc2626", "#9333ea", "#dbeafe", "#fce7f3", "#fef9c3", "#f2f2f7"];
 /* 새 과목 색: 기본 8색 중 안 쓴 색 → 다 쓰면 기존 색들과 가장 덜 겹치는 색을 골라요 */
 function hslHex(h, s, l) {
   s /= 100; l /= 100;
@@ -1147,7 +1149,6 @@ function applyWallpaper() {
 }
 /* 오른쪽 배경 색: ""면 사진을 흐리게 깔고, 색을 고르면 그 색으로 */
 // 오른쪽 배경 기본 색 12개(어두운 색 · 선명한 색 · 밝은 색). 밝은 색이면 글씨가 자동으로 검게. 더 필요하면 + 로 직접
-const BG_COLORS = ["#1c1c1e", "#3a3a3c", "#1e3a8a", "#2563eb", "#059669", "#ea580c", "#dc2626", "#9333ea", "#dbeafe", "#fce7f3", "#fef9c3", "#f2f2f7"];
 // 과목 색 고르기에서 보여 줄 색 12개
 const SUBJ_COLORS = [...COLORS.slice(0, 7), "#ff5fa2", "#8bc34a", "#5b5bd6", "#a0522d", "#c9c9cf"];
 /* 글씨 색: 자동이면 오른쪽 배경이 밝을 때 검정 글씨로 */
